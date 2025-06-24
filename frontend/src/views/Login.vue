@@ -52,13 +52,18 @@
           </div>
         </div>
 
+        <!-- エラーメッセージ -->
+        <div v-if="errorMessage" class="text-red-600 text-sm text-center">
+          {{ errorMessage }}
+        </div>
+
         <div>
           <button
             type="submit"
-            :disabled="isLoading"
+            :disabled="authStore.isLoading"
             class="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <span v-if="isLoading">ログイン中...</span>
+            <span v-if="authStore.isLoading">ログイン中...</span>
             <span v-else>ログイン</span>
           </button>
         </div>
@@ -70,8 +75,10 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useAuthStore } from '../stores/auth'
 
 const router = useRouter()
+const authStore = useAuthStore()
 
 const credentials = ref({
   username: '',
@@ -79,23 +86,17 @@ const credentials = ref({
 })
 
 const rememberMe = ref(false)
-const isLoading = ref(false)
+const errorMessage = ref('')
 
 const handleLogin = async () => {
-  isLoading.value = true
+  errorMessage.value = ''
   
   try {
-    // TODO: 実際の認証APIを呼び出す
-    // 現在は仮の実装
-    if (credentials.value.username && credentials.value.password) {
-      // 仮のログイン成功処理
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      router.push('/dashboard')
-    }
-  } catch (error) {
+    await authStore.login(credentials.value)
+    router.push('/dashboard')
+  } catch (error: any) {
+    errorMessage.value = error.message || 'ログインに失敗しました'
     console.error('ログインエラー:', error)
-  } finally {
-    isLoading.value = false
   }
 }
 </script>
