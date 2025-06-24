@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import axios from 'axios'
 import { useAuthStore } from './auth'
 
 interface ClaudeMessage {
@@ -23,14 +24,37 @@ export const useClaudeStore = defineStore('claude', () => {
   const isLoading = ref(false)
   const isConnected = ref(false)
 
-  // Auth store
-  const authStore = useAuthStore()
+  // API クライアント
+  const apiClient = axios.create({
+    baseURL: '/api'
+  })
+
+  // リクエストインターセプター（認証トークンを動的に取得）
+  apiClient.interceptors.request.use((config) => {
+    const authStore = useAuthStore()
+    if (authStore.token) {
+      config.headers.Authorization = `Bearer ${authStore.token}`
+    }
+    return config
+  })
+
+  // レスポンスインターセプター（認証エラー処理）
+  apiClient.interceptors.response.use(
+    (response) => response,
+    (error) => {
+      if (error.response?.status === 401) {
+        const authStore = useAuthStore()
+        authStore.logout()
+      }
+      return Promise.reject(error)
+    }
+  )
 
   // Actions
   const startSession = async (sessionId: string): Promise<void> => {
     isLoading.value = true
     try {
-      await authStore.api.post(`/claude/sessions/${sessionId}/start`)
+      await apiClient.post(`/claude/sessions/${sessionId}/start`)
       await fetchSessionStatus(sessionId)
       isConnected.value = true
     } catch (error) {
@@ -44,7 +68,7 @@ export const useClaudeStore = defineStore('claude', () => {
   const stopSession = async (sessionId: string): Promise<void> => {
     isLoading.value = true
     try {
-      await authStore.api.post(`/claude/sessions/${sessionId}/stop`)
+      await apiClient.post(`/claude/sessions/${sessionId}/stop`)
       isConnected.value = false
       sessionStatus.value = null
     } catch (error) {
@@ -58,7 +82,7 @@ export const useClaudeStore = defineStore('claude', () => {
   const sendMessage = async (sessionId: string, message: string): Promise<string> => {
     isLoading.value = true
     try {
-      const response = await authStore.api.post(`/claude/sessions/${sessionId}/message`, {
+      const response = await apiClient.post(`/claude/sessions/${sessionId}/message`, {
         message
       })
       
@@ -76,7 +100,7 @@ export const useClaudeStore = defineStore('claude', () => {
 
   const fetchMessages = async (sessionId: string): Promise<void> => {
     try {
-      const response = await authStore.api.get(`/claude/sessions/${sessionId}/messages`)
+      const response = await apiClient.get(`/claude/sessions/${sessionId}/messages`)
       messages.value = response.data.messages
     } catch (error) {
       console.error('Claude メッセージ履歴取得エラー:', error)
@@ -86,7 +110,7 @@ export const useClaudeStore = defineStore('claude', () => {
 
   const fetchSessionStatus = async (sessionId: string): Promise<void> => {
     try {
-      const response = await authStore.api.get(`/claude/sessions/${sessionId}/status`)
+      const response = await apiClient.get(`/claude/sessions/${sessionId}/status`)
       sessionStatus.value = response.data
       isConnected.value = response.data.is_active
     } catch (error) {
