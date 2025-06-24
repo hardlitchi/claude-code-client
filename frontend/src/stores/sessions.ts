@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import axios from 'axios'
 import { useAuthStore } from './auth'
 
 interface Session {
@@ -34,14 +35,37 @@ export const useSessionsStore = defineStore('sessions', () => {
   const currentSession = ref<Session | null>(null)
   const isLoading = ref(false)
 
-  // Auth store
-  const authStore = useAuthStore()
+  // API クライアント
+  const apiClient = axios.create({
+    baseURL: '/api'
+  })
+
+  // リクエストインターセプター（認証トークンを動的に取得）
+  apiClient.interceptors.request.use((config) => {
+    const authStore = useAuthStore()
+    if (authStore.token) {
+      config.headers.Authorization = `Bearer ${authStore.token}`
+    }
+    return config
+  })
+
+  // レスポンスインターセプター（認証エラー処理）
+  apiClient.interceptors.response.use(
+    (response) => response,
+    (error) => {
+      if (error.response?.status === 401) {
+        const authStore = useAuthStore()
+        authStore.logout()
+      }
+      return Promise.reject(error)
+    }
+  )
 
   // Actions
   const fetchSessions = async (): Promise<void> => {
     isLoading.value = true
     try {
-      const response = await authStore.api.get('/sessions/')
+      const response = await apiClient.get('/sessions/')
       sessions.value = response.data.sessions
     } catch (error) {
       console.error('セッション一覧取得エラー:', error)
@@ -54,7 +78,7 @@ export const useSessionsStore = defineStore('sessions', () => {
   const createSession = async (sessionData: SessionCreate): Promise<Session> => {
     isLoading.value = true
     try {
-      const response = await authStore.api.post('/sessions/', sessionData)
+      const response = await apiClient.post('/sessions/', sessionData)
       const newSession = response.data
       sessions.value.push(newSession)
       return newSession
@@ -69,7 +93,7 @@ export const useSessionsStore = defineStore('sessions', () => {
   const getSession = async (sessionId: string): Promise<Session> => {
     isLoading.value = true
     try {
-      const response = await authStore.api.get(`/sessions/${sessionId}`)
+      const response = await apiClient.get(`/sessions/${sessionId}`)
       const session = response.data
       currentSession.value = session
       
@@ -91,7 +115,7 @@ export const useSessionsStore = defineStore('sessions', () => {
   const updateSession = async (sessionId: string, updateData: SessionUpdate): Promise<Session> => {
     isLoading.value = true
     try {
-      const response = await authStore.api.put(`/sessions/${sessionId}`, updateData)
+      const response = await apiClient.put(`/sessions/${sessionId}`, updateData)
       const updatedSession = response.data
       
       // 現在のセッションを更新
@@ -117,7 +141,7 @@ export const useSessionsStore = defineStore('sessions', () => {
   const deleteSession = async (sessionId: string): Promise<void> => {
     isLoading.value = true
     try {
-      await authStore.api.delete(`/sessions/${sessionId}`)
+      await apiClient.delete(`/sessions/${sessionId}`)
       
       // セッション一覧から削除
       sessions.value = sessions.value.filter(s => s.session_id !== sessionId)
@@ -137,7 +161,7 @@ export const useSessionsStore = defineStore('sessions', () => {
   const startSession = async (sessionId: string): Promise<void> => {
     isLoading.value = true
     try {
-      await authStore.api.post(`/sessions/${sessionId}/start`)
+      await apiClient.post(`/sessions/${sessionId}/start`)
       
       // セッション状態を更新
       await updateSessionStatus(sessionId, 'running')
@@ -152,7 +176,7 @@ export const useSessionsStore = defineStore('sessions', () => {
   const stopSession = async (sessionId: string): Promise<void> => {
     isLoading.value = true
     try {
-      await authStore.api.post(`/sessions/${sessionId}/stop`)
+      await apiClient.post(`/sessions/${sessionId}/stop`)
       
       // セッション状態を更新
       await updateSessionStatus(sessionId, 'stopped')
