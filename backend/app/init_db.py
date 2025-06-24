@@ -26,7 +26,7 @@ def create_default_users():
             logger.info("Creating default admin user...")
             admin_user = User(
                 username="admin",
-                email="admin@localhost",
+                email="admin@example.com",
                 hashed_password=get_password_hash("admin123"),
                 is_active=True,
                 is_admin=True
@@ -42,7 +42,7 @@ def create_default_users():
             logger.info("Creating default test user...")
             test_user = User(
                 username="testuser",
-                email="test@localhost",
+                email="test@example.com",
                 hashed_password=get_password_hash("test123"),
                 is_active=True,
                 is_admin=False

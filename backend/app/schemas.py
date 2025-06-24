@@ -2,14 +2,14 @@
 Pydantic スキーマ定義（API リクエスト/レスポンス）
 """
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 from datetime import datetime
 from typing import Optional, List
 
 # ユーザー関連スキーマ
 class UserBase(BaseModel):
     username: str
-    email: Optional[EmailStr] = None
+    email: Optional[str] = None
 
 class UserCreate(UserBase):
     password: str

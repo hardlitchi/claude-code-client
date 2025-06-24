@@ -99,10 +99,12 @@ npm run dev
 **管理者**
 - ユーザー名: `admin`
 - パスワード: `admin123`
+- メール: `admin@example.com`
 
 **一般ユーザー**
 - ユーザー名: `testuser`
 - パスワード: `test123`
+- メール: `test@example.com`
 
 ## プロジェクト構造
 

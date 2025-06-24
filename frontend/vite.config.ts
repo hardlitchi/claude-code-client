@@ -10,6 +10,7 @@ export default defineConfig({
     }
   },
   server: {
+    allowedHosts: ['code.pve.hidearea.net','front.claude.code.pve.hidearea.net'],
     host: '0.0.0.0',
     port: 3000,
     proxy: {
