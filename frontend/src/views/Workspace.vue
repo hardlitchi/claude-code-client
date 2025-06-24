@@ -47,8 +47,13 @@
         <div class="bg-gray-800 px-4 py-2 text-white text-sm">
           Terminal
         </div>
-        <div ref="terminalContainer" class="flex-1 p-2">
-          <!-- xterm.js がここにマウントされます -->
+        <div class="flex-1">
+          <Terminal 
+            :session-id="sessionData.id"
+            @connected="onTerminalConnected"
+            @disconnected="onTerminalDisconnected"
+            @error="onTerminalError"
+          />
         </div>
       </div>
 
@@ -126,6 +131,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import Terminal from '../components/Terminal.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -165,8 +171,7 @@ const notificationsEnabled = ref(true)
 const connectionStatus = ref<'connected' | 'disconnected'>('connected')
 const sessionDuration = ref('2h 15m')
 
-// Terminal関連
-const terminalContainer = ref<HTMLElement>()
+// Terminal関連は Terminal.vue コンポーネントで管理
 
 // スタイルクラス
 const statusClasses = {
@@ -220,28 +225,25 @@ const startResize = (e: MouseEvent) => {
   console.log('リサイズ開始', e)
 }
 
-const initializeTerminal = async () => {
-  // TODO: xterm.js の初期化
-  // 現在は仮実装
-  if (terminalContainer.value) {
-    terminalContainer.value.innerHTML = `
-      <div style="color: #00ff00; font-family: monospace; padding: 10px;">
-        <div>$ cd /home/user/projectA</div>
-        <div>$ ls -la</div>
-        <div>total 24</div>
-        <div>drwxr-xr-x  3 user  staff   96 Nov 24 10:30 .</div>
-        <div>drwxr-xr-x  4 user  staff  128 Nov 24 10:30 ..</div>
-        <div>-rw-r--r--  1 user  staff  120 Nov 24 10:30 README.md</div>
-        <div>$ <span style="animation: blink 1s infinite;">■</span></div>
-      </div>
-    `
-  }
+// Terminal イベントハンドラー
+const onTerminalConnected = () => {
+  connectionStatus.value = 'connected'
+  console.log('Terminal connected')
+}
+
+const onTerminalDisconnected = () => {
+  connectionStatus.value = 'disconnected'
+  console.log('Terminal disconnected')
+}
+
+const onTerminalError = (message: string) => {
+  console.error('Terminal error:', message)
+  // TODO: エラーメッセージを表示
 }
 
 // ライフサイクル
 onMounted(async () => {
   await nextTick()
-  initializeTerminal()
   
   // TODO: セッション情報の取得
   console.log('ワークスペース初期化:', route.params.sessionId)
