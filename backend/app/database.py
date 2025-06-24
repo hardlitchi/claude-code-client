@@ -11,7 +11,7 @@ import os
 # データベースURL設定
 DATABASE_URL = os.getenv(
     "DATABASE_URL", 
-    "postgresql://claude_user:claude_password@localhost:5432/claude_db"
+    "postgresql://claude_user:claude_password@db:5432/claude_db"
 )
 
 # SQLite を開発時のフォールバックとして使用

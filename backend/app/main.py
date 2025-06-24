@@ -8,11 +8,20 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import uvicorn
 
-from .database import Base, engine
 from .routers import auth, sessions, users, terminal, claude
+from .init_db import init_database
+import logging
 
-# データベーステーブル作成
-Base.metadata.create_all(bind=engine)
+# ログ設定
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# データベース初期化
+try:
+    init_database()
+except Exception as e:
+    logger.error(f"Database initialization failed: {e}")
+    raise
 
 # アプリケーション作成
 app = FastAPI(
