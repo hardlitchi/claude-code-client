@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Claude Code Client - プロトタイプ</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .terminal { 
+            background: #1a1a1a; 
+            color: #00ff00; 
+            font-family: 'Monaco', 'Menlo', monospace; 
+        }
+        .chat-bubble-user { 
+            background: #2563eb; 
+            color: white; 
+        }
+        .chat-bubble-claude { 
+            background: #f3f4f6; 
+            color: #1f2937; 
+        }
+        .status-indicator { 
+            width: 8px; 
+            height: 8px; 
+            border-radius: 50%; 
+        }
+        .status-online { background-color: #10b981; }
+        .status-offline { background-color: #ef4444; }
+        .status-paused { background-color: #f59e0b; }
+    </style>
+</head>
+<body class="bg-gray-50">
+    
+    <!-- Navigation -->
+    <nav class="bg-white shadow-sm border-b">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <h1 class="text-xl font-bold text-gray-900">Claude Code Client</h1>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <button id="worktreeBtn" class="text-gray-600 hover:text-gray-900">🌿 Worktree</button>
+                    <button id="settingsBtn" class="text-gray-600 hover:text-gray-900">⚙️ 設定</button>
+                    <button id="profileBtn" class="text-gray-600 hover:text-gray-900">👤 プロフィール</button>
+                    <button id="logoutBtn" class="text-gray-600 hover:text-gray-900">🚪 ログアウト</button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Login Screen -->
+    <div id="loginScreen" class="min-h-screen flex items-center justify-center">
+        <div class="max-w-md w-full space-y-8">
+            <div>
+                <h2 class="mt-6 text-center text-3xl font-extrabold text-gray-900">
+                    Claude Code Client
+                </h2>
+                <p class="mt-2 text-center text-sm text-gray-600">
+                    Webブラウザから Claude Code を操作
+                </p>
+            </div>
+            <form class="mt-8 space-y-6" onsubmit="login(event)">
+                <div class="rounded-md shadow-sm -space-y-px">
+                    <div>
+                        <input id="username" name="username" type="text" required 
+                               class="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm" 
+                               placeholder="ユーザーID">
+                    </div>
+                    <div>
+                        <input id="password" name="password" type="password" required 
+                               class="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm" 
+                               placeholder="パスワード">
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center">
+                        <input id="remember-me" name="remember-me" type="checkbox" 
+                               class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                        <label for="remember-me" class="ml-2 block text-sm text-gray-900">
+                            ログイン状態を保持
+                        </label>
+                    </div>
+                </div>
+
+                <div>
+                    <button type="submit" 
+                            class="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                        ログイン
+                    </button>
+                </div>
+                
+                <div class="mt-4 text-center">
+                    <p class="text-sm text-gray-600">※将来的に GitHub/Google OAuth に対応予定</p>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Dashboard -->
+    <div id="dashboardScreen" class="hidden min-h-screen bg-gray-50">
+        <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+            <div class="px-4 py-6 sm:px-0">
+                <h1 class="text-2xl font-bold text-gray-900 mb-6">📊 ダッシュボード</h1>
+                
+                <!-- Active Sessions -->
+                <div class="bg-white overflow-hidden shadow rounded-lg mb-6">
+                    <div class="px-4 py-5 sm:p-6">
+                        <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">🚀 アクティブセッション</h3>
+                        
+                        <!-- Session List -->
+                        <div class="space-y-3">
+                            <div class="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+                                <div class="flex items-center space-x-3">
+                                    <span class="text-xl">📁</span>
+                                    <div>
+                                        <h4 class="font-medium text-gray-900">プロジェクトA</h4>
+                                        <p class="text-sm text-gray-600">/home/user/projectA (main)</p>
+                                        <p class="text-xs text-gray-500">🌿 Worktree: 2個 | 並行ブランチ: 2個</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-center space-x-3">
+                                    <div class="flex items-center space-x-1">
+                                        <span class="status-indicator status-online"></span>
+                                        <span class="text-sm text-gray-600">実行中</span>
+                                    </div>
+                                    <span class="text-sm text-gray-500">最終更新: 5分前</span>
+                                    <button onclick="openWorkspace('project-a')" class="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700">開く</button>
+                                    <button class="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700">削除</button>
+                                </div>
+                            </div>
+                            
+                            <div class="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+                                <div class="flex items-center space-x-3">
+                                    <span class="text-xl">📁</span>
+                                    <div>
+                                        <h4 class="font-medium text-gray-900">ウェブアプリB</h4>
+                                        <p class="text-sm text-gray-600">/home/user/webapp (dev)</p>
+                                        <p class="text-xs text-gray-500">🌿 Worktree: 1個 | 並行ブランチ: 1個</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-center space-x-3">
+                                    <div class="flex items-center space-x-1">
+                                        <span class="status-indicator status-paused"></span>
+                                        <span class="text-sm text-gray-600">停止中</span>
+                                    </div>
+                                    <span class="text-sm text-gray-500">最終更新: 1時間前</span>
+                                    <button onclick="openWorkspace('webapp-b')" class="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700">開く</button>
+                                    <button class="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700">削除</button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-4 flex space-x-3">
+                            <button onclick="createNewSession()" class="flex-1 flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700">
+                                + 新しいセッション作成
+                            </button>
+                            <button onclick="showWorktreeManagement()" class="flex-1 flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                                🌿 Worktree管理
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Usage Statistics -->
+                <div class="bg-white overflow-hidden shadow rounded-lg">
+                    <div class="px-4 py-5 sm:p-6">
+                        <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">📈 使用統計</h3>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="text-center">
+                                <div class="text-2xl font-bold text-blue-600">2</div>
+                                <div class="text-sm text-gray-600">セッション数</div>
+                            </div>
+                            <div class="text-center">
+                                <div class="text-2xl font-bold text-green-600">3</div>
+                                <div class="text-sm text-gray-600">Worktree数</div>
+                            </div>
+                            <div class="text-center">
+                                <div class="text-2xl font-bold text-yellow-600">12</div>
+                                <div class="text-sm text-gray-600">通知回数</div>
+                            </div>
+                            <div class="text-center">
+                                <div class="text-2xl font-bold text-purple-600">2024-06-24</div>
+                                <div class="text-sm text-gray-600">最終ログイン</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Workspace Screen -->
+    <div id="workspaceScreen" class="hidden min-h-screen bg-gray-50">
+        <div class="flex h-screen">
+            <!-- Main Content -->
+            <div class="flex-1 flex flex-col">
+                <!-- Header -->
+                <div class="bg-white border-b px-6 py-4">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-3">
+                            <button onclick="backToDashboard()" class="text-gray-600 hover:text-gray-900">← 戻る</button>
+                            <h2 class="text-lg font-medium text-gray-900">📁 プロジェクトA (main)</h2>
+                            <div class="flex items-center space-x-2">
+                                <span class="text-sm text-gray-600">🌿</span>
+                                <button onclick="switchWorktree('feature')" class="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded hover:bg-blue-200">feature</button>
+                                <button onclick="switchWorktree('hotfix')" class="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded hover:bg-yellow-200">hotfix</button>
+                            </div>
+                        </div>
+                        <div class="flex items-center space-x-4">
+                            <div class="flex items-center space-x-1">
+                                <span class="status-indicator status-online"></span>
+                                <span class="text-sm text-gray-600">接続中</span>
+                            </div>
+                            <button class="text-gray-600 hover:text-gray-900">最小化</button>
+                            <button class="text-gray-600 hover:text-gray-900">⚙️</button>
+                            <button class="text-gray-600 hover:text-gray-900">✕</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Split Content -->
+                <div class="flex-1 flex">
+                    <!-- Terminal Section -->
+                    <div class="flex-1 flex flex-col border-r">
+                        <div class="bg-gray-100 px-4 py-2 border-b">
+                            <h3 class="font-medium text-gray-900">Terminal</h3>
+                        </div>
+                        <div class="flex-1 terminal p-4 overflow-y-auto">
+                            <div class="text-green-400">
+                                $ cd /home/user/projectA<br>
+                                $ ls -la<br>
+                                total 24<br>
+                                drwxr-xr-x  3 user  staff   96 Jun 24 10:30 .<br>
+                                drwxr-xr-x  4 user  staff  128 Jun 24 10:25 ..<br>
+                                -rw-r--r--  1 user  staff  256 Jun 24 10:30 README.md<br>
+                                -rw-r--r--  1 user  staff  512 Jun 24 10:28 main.py<br>
+                                $ <span class="animate-pulse">■</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Chat Section -->
+                    <div class="flex-1 flex flex-col">
+                        <div class="bg-gray-100 px-4 py-2 border-b">
+                            <h3 class="font-medium text-gray-900">Claude Chat</h3>
+                        </div>
+                        <div class="flex-1 p-4 overflow-y-auto space-y-4">
+                            <!-- Chat Messages -->
+                            <div class="flex justify-end">
+                                <div class="chat-bubble-user max-w-xs px-4 py-2 rounded-lg">
+                                    READMEファイルを作成してください
+                                </div>
+                            </div>
+                            <div class="flex justify-start">
+                                <div class="chat-bubble-claude max-w-xs px-4 py-2 rounded-lg">
+                                    承知しました。プロジェクトのREADMEファイルを作成します。どのような内容を含めたいですか？
+                                </div>
+                            </div>
+                            <div class="flex justify-end">
+                                <div class="chat-bubble-user max-w-xs px-4 py-2 rounded-lg">
+                                    プロジェクトの概要と使用方法を記載してください
+                                </div>
+                            </div>
+                            <div class="flex justify-start">
+                                <div class="chat-bubble-claude max-w-xs px-4 py-2 rounded-lg">
+                                    了解です。README.mdファイルを作成して、プロジェクトの概要と使用方法を記載します。
+                                </div>
+                            </div>
+                        </div>
+                        <div class="border-t p-4">
+                            <div class="flex space-x-2">
+                                <input type="text" placeholder="メッセージを入力..." 
+                                       class="flex-1 border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                <button class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">送信</button>
+                            </div>
+                            <div class="flex items-center justify-between mt-2 text-sm text-gray-600">
+                                <div class="flex items-center space-x-4">
+                                    <span>🔔 通知設定: ON</span>
+                                    <span>📊 ステータス: 稼働中</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Status Bar -->
+                <div class="bg-gray-800 text-white px-6 py-2 text-sm">
+                    📊 System: CPU 45% | Memory 62% | Session: 2h 15m | 🌿 Worktree: main
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Screen -->
+    <div id="settingsScreen" class="hidden min-h-screen bg-gray-50">
+        <div class="max-w-4xl mx-auto py-6 sm:px-6 lg:px-8">
+            <div class="px-4 py-6 sm:px-0">
+                <div class="flex items-center justify-between mb-6">
+                    <h1 class="text-2xl font-bold text-gray-900">⚙️ 設定</h1>
+                    <button onclick="backToDashboard()" class="text-gray-600 hover:text-gray-900">← 戻る</button>
+                </div>
+                
+                <!-- Notification Settings -->
+                <div class="bg-white overflow-hidden shadow rounded-lg mb-6">
+                    <div class="px-4 py-5 sm:p-6">
+                        <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">🔔 通知設定</h3>
+                        <div class="space-y-4">
+                            <label class="flex items-center">
+                                <input type="checkbox" checked class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                                <span class="ml-2 text-sm text-gray-900">デスクトップ通知を有効にする</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" checked class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                                <span class="ml-2 text-sm text-gray-900">Claudeの確認要求時に通知</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" checked class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                                <span class="ml-2 text-sm text-gray-900">作業完了時に通知</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                                <span class="ml-2 text-sm text-gray-900">エラー発生時に通知</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Webhook Settings -->
+                <div class="bg-white overflow-hidden shadow rounded-lg mb-6">
+                    <div class="px-4 py-5 sm:p-6">
+                        <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">🔗 Webhook連携</h3>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Slack Webhook URL</label>
+                                <input type="url" class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Discord Webhook URL</label>
+                                <input type="url" class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">LINE Bot Token</label>
+                                <input type="text" class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                        </div>
+                        <div class="mt-6 flex space-x-3">
+                            <button class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">設定を保存</button>
+                            <button class="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700">テスト通知を送信</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Worktree Management Screen -->
+    <div id="worktreeScreen" class="hidden min-h-screen bg-gray-50">
+        <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+            <div class="px-4 py-6 sm:px-0">
+                <div class="flex items-center justify-between mb-6">
+                    <h1 class="text-2xl font-bold text-gray-900">🌿 Git Worktree管理</h1>
+                    <button onclick="backToDashboard()" class="text-gray-600 hover:text-gray-900">← 戻る</button>
+                </div>
+                
+                <!-- Worktree Overview -->
+                <div class="bg-white overflow-hidden shadow rounded-lg mb-6">
+                    <div class="px-4 py-5 sm:p-6">
+                        <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">📊 Worktree概要</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div class="text-center p-4 bg-gray-50 rounded-lg">
+                                <div class="text-sm text-gray-600">リポジトリ</div>
+                                <div class="text-lg font-medium text-gray-900">/home/user/projectA</div>
+                                <div class="text-sm text-green-600">🟢 正常</div>
+                            </div>
+                            <div class="text-center p-4 bg-gray-50 rounded-lg">
+                                <div class="text-sm text-gray-600">メインブランチ</div>
+                                <div class="text-lg font-medium text-gray-900">main</div>
+                                <div class="text-sm text-blue-600">🔄 同期済み</div>
+                            </div>
+                            <div class="text-center p-4 bg-gray-50 rounded-lg">
+                                <div class="text-sm text-gray-600">総Worktree数</div>
+                                <div class="text-lg font-medium text-gray-900">3個</div>
+                                <div class="text-sm text-gray-600">アクティブ: 2個</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Worktree Filter -->
+                <div class="bg-white overflow-hidden shadow rounded-lg mb-6">
+                    <div class="px-4 py-5 sm:p-6">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-lg leading-6 font-medium text-gray-900">🔍 フィルタ・検索</h3>
+                            <button onclick="createNewWorktree()" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">+ 新規作成</button>
+                        </div>
+                        <div class="flex items-center space-x-4">
+                            <select class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                                <option>ブランチ: すべて</option>
+                                <option>main</option>
+                                <option>feature/*</option>
+                                <option>hotfix/*</option>
+                            </select>
+                            <select class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                                <option>状態: すべて</option>
+                                <option>アクティブ</option>
+                                <option>停止中</option>
+                            </select>
+                            <input type="text" placeholder="検索..." class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Worktree List -->
+                <div class="bg-white overflow-hidden shadow rounded-lg mb-6">
+                    <div class="px-4 py-5 sm:p-6">
+                        <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">📋 Worktree一覧</h3>
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-200">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ブランチ</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">パス</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">状態</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">セッション</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">最終更新</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="bg-white divide-y divide-gray-200">
+                                    <tr>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">main</td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">./ (メイン)</td>
+                                        <td class="px-6 py-4 whitespace-nowrap">
+                                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">🟢 アクティブ</span>
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">実行中</td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">5分前</td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                            <button class="text-blue-600 hover:text-blue-900 mr-3">開く</button>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">feature/ui</td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">../feature-ui</td>
+                                        <td class="px-6 py-4 whitespace-nowrap">
+                                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">🟢 アクティブ</span>
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">実行中</td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">10分前</td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                            <button class="text-blue-600 hover:text-blue-900 mr-3">開く</button>
+                                            <button class="text-red-600 hover:text-red-900">削除</button>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">hotfix</td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">../hotfix</td>
+                                        <td class="px-6 py-4 whitespace-nowrap">
+                                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">⏸️ 停止中</span>
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">-</td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">2時間前</td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                            <button class="text-blue-600 hover:text-blue-900 mr-3">開く</button>
+                                            <button class="text-red-600 hover:text-red-900">削除</button>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="mt-4 flex space-x-3">
+                            <button class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">選択項目を削除</button>
+                            <button class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">一括同期</button>
+                            <button class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">ブランチ比較</button>
+                            <button class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">マージ支援</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Branch Comparison -->
+                <div class="bg-white overflow-hidden shadow rounded-lg">
+                    <div class="px-4 py-5 sm:p-6">
+                        <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">📊 ブランチ比較 (main ↔ feature/ui)</h3>
+                        <div class="mb-4 p-4 bg-gray-50 rounded-lg">
+                            <div class="text-sm font-medium text-gray-900 mb-2">📝 変更ファイル: 12個 | 追加: +89行 | 削除: -23行</div>
+                        </div>
+                        <div class="space-y-2">
+                            <div class="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
+                                <div class="flex items-center space-x-3">
+                                    <span class="text-lg">📄</span>
+                                    <div>
+                                        <div class="text-sm font-medium text-gray-900">src/components/UI.vue</div>
+                                        <div class="text-xs text-gray-500">+45/-12</div>
+                                    </div>
+                                </div>
+                                <div class="flex space-x-2">
+                                    <button class="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700">表示</button>
+                                    <button class="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700">マージ</button>
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
+                                <div class="flex items-center space-x-3">
+                                    <span class="text-lg">📄</span>
+                                    <div>
+                                        <div class="text-sm font-medium text-gray-900">src/styles/main.css</div>
+                                        <div class="text-xs text-gray-500">+23/-8</div>
+                                    </div>
+                                </div>
+                                <div class="flex space-x-2">
+                                    <button class="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700">表示</button>
+                                    <button class="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700">マージ</button>
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
+                                <div class="flex items-center space-x-3">
+                                    <span class="text-lg">📄</span>
+                                    <div>
+                                        <div class="text-sm font-medium text-gray-900">package.json</div>
+                                        <div class="text-xs text-gray-500">+3/-1</div>
+                                    </div>
+                                </div>
+                                <div class="flex space-x-2">
+                                    <button class="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700">表示</button>
+                                    <button class="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700">マージ</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Screen management
+        function showScreen(screenId) {
+            const screens = ['loginScreen', 'dashboardScreen', 'workspaceScreen', 'settingsScreen', 'worktreeScreen'];
+            screens.forEach(id => {
+                document.getElementById(id).classList.add('hidden');
+            });
+            document.getElementById(screenId).classList.remove('hidden');
+            
+            // Show/hide navigation
+            const nav = document.querySelector('nav');
+            if (screenId === 'loginScreen') {
+                nav.style.display = 'none';
+            } else {
+                nav.style.display = 'block';
+            }
+        }
+
+        // Authentication
+        function login(event) {
+            event.preventDefault();
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            if (username && password) {
+                showScreen('dashboardScreen');
+                // Simulate successful login
+                console.log('Login successful:', username);
+            }
+        }
+
+        // Navigation functions
+        function openWorkspace(sessionId) {
+            showScreen('workspaceScreen');
+        }
+
+        function createNewSession() {
+            alert('新しいセッションを作成します（実装予定）');
+        }
+
+        function backToDashboard() {
+            showScreen('dashboardScreen');
+        }
+
+        // Worktree functions
+        function showWorktreeManagement() {
+            showScreen('worktreeScreen');
+        }
+
+        function switchWorktree(branch) {
+            alert(`Worktreeを${branch}ブランチに切り替えます（実装予定）`);
+        }
+
+        function createNewWorktree() {
+            const branch = prompt('新しいWorktreeのブランチ名を入力してください:');
+            if (branch) {
+                alert(`${branch}ブランチのWorktreeを作成します（実装予定）`);
+            }
+        }
+
+        // Event listeners
+        document.getElementById('worktreeBtn').addEventListener('click', () => {
+            showScreen('worktreeScreen');
+        });
+
+        document.getElementById('settingsBtn').addEventListener('click', () => {
+            showScreen('settingsScreen');
+        });
+
+        document.getElementById('profileBtn').addEventListener('click', () => {
+            alert('プロフィール画面（実装予定）');
+        });
+
+        document.getElementById('logoutBtn').addEventListener('click', () => {
+            showScreen('loginScreen');
+        });
+
+        // Initialize
+        showScreen('loginScreen');
+        
+        // Simulate typing in terminal
+        setTimeout(() => {
+            const terminal = document.querySelector('.terminal');
+            if (terminal) {
+                terminal.innerHTML += '<br>$ python main.py<br>Hello, Claude Code Client!<br>$ <span class="animate-pulse">■</span>';
+            }
+        }, 3000);
+    </script>
+</body>
+</html>
