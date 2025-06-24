@@ -69,8 +69,8 @@
         <!-- チャット履歴 -->
         <div class="flex-1 overflow-y-auto p-4 space-y-4">
           <div 
-            v-for="message in chatHistory" 
-            :key="message.id"
+            v-for="(message, index) in claudeStore.messages" 
+            :key="index"
             :class="message.sender === 'user' ? 'text-right' : 'text-left'"
           >
             <div 
@@ -78,16 +78,29 @@
                 'inline-block max-w-xs lg:max-w-md px-4 py-2 rounded-lg',
                 message.sender === 'user' 
                   ? 'bg-blue-600 text-white' 
-                  : 'bg-gray-200 text-gray-800'
+                  : message.sender === 'claude'
+                  ? 'bg-gray-200 text-gray-800'
+                  : message.sender === 'system'
+                  ? 'bg-green-100 text-green-800'
+                  : 'bg-red-100 text-red-800'
               ]"
             >
               <div class="text-sm">{{ message.content }}</div>
-              <div class="text-xs opacity-75 mt-1">{{ message.timestamp }}</div>
+              <div class="text-xs opacity-75 mt-1">
+                {{ new Date(message.timestamp).toLocaleTimeString('ja-JP', { 
+                  hour: '2-digit', 
+                  minute: '2-digit' 
+                }) }}
+              </div>
             </div>
           </div>
           
-          <div v-if="chatHistory.length === 0" class="text-center text-gray-500 py-8">
+          <div v-if="claudeStore.messages.length === 0" class="text-center text-gray-500 py-8">
             Claudeとのチャットを開始してください
+          </div>
+          
+          <div v-if="claudeStore.isLoading" class="text-center text-gray-500">
+            Claudeが応答中...
           </div>
         </div>
 
@@ -103,10 +116,10 @@
             />
             <button 
               @click="sendMessage"
-              :disabled="!newMessage.trim()"
+              :disabled="!newMessage.trim() || claudeStore.isLoading"
               class="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white px-4 py-2 rounded-md font-medium"
             >
-              送信
+              {{ claudeStore.isLoading ? '送信中...' : '送信' }}
             </button>
           </div>
         </div>
@@ -132,9 +145,11 @@
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import Terminal from '../components/Terminal.vue'
+import { useClaudeStore } from '../stores/claude'
 
 const route = useRoute()
 const router = useRouter()
+const claudeStore = useClaudeStore()
 
 interface ChatMessage {
   id: string
@@ -156,15 +171,6 @@ const sessionData = ref<SessionData>({
   name: 'プロジェクトA',
   status: 'running'
 })
-
-const chatHistory = ref<ChatMessage[]>([
-  {
-    id: '1',
-    sender: 'claude',
-    content: 'こんにちは！Claude Code セッションへようこそ。何かお手伝いできることはありますか？',
-    timestamp: '10:30'
-  }
-])
 
 const newMessage = ref('')
 const notificationsEnabled = ref(true)
@@ -189,35 +195,18 @@ const toggleNotifications = () => {
   notificationsEnabled.value = !notificationsEnabled.value
 }
 
-const sendMessage = () => {
+const sendMessage = async () => {
   if (!newMessage.value.trim()) return
 
-  const userMessage: ChatMessage = {
-    id: Date.now().toString(),
-    sender: 'user',
-    content: newMessage.value,
-    timestamp: new Date().toLocaleTimeString('ja-JP', { 
-      hour: '2-digit', 
-      minute: '2-digit' 
-    })
-  }
-
-  chatHistory.value.push(userMessage)
+  const message = newMessage.value
   newMessage.value = ''
 
-  // 仮のClaude返答
-  setTimeout(() => {
-    const claudeMessage: ChatMessage = {
-      id: (Date.now() + 1).toString(),
-      sender: 'claude',
-      content: 'ご質問ありがとうございます。現在このメッセージは仮の応答です。実際のClaude Code統合は次のフェーズで実装予定です。',
-      timestamp: new Date().toLocaleTimeString('ja-JP', { 
-        hour: '2-digit', 
-        minute: '2-digit' 
-      })
-    }
-    chatHistory.value.push(claudeMessage)
-  }, 1000)
+  try {
+    await claudeStore.sendMessage(sessionData.value.id, message)
+  } catch (error: any) {
+    console.error('メッセージ送信エラー:', error)
+    claudeStore.addLocalMessage('error', 'メッセージの送信に失敗しました')
+  }
 }
 
 const startResize = (e: MouseEvent) => {
@@ -245,12 +234,28 @@ const onTerminalError = (message: string) => {
 onMounted(async () => {
   await nextTick()
   
-  // TODO: セッション情報の取得
-  console.log('ワークスペース初期化:', route.params.sessionId)
+  try {
+    // Claude セッションを開始
+    await claudeStore.startSession(sessionData.value.id)
+    
+    // メッセージ履歴を取得
+    await claudeStore.fetchMessages(sessionData.value.id)
+    
+    console.log('ワークスペース初期化完了:', route.params.sessionId)
+  } catch (error) {
+    console.error('ワークスペース初期化エラー:', error)
+    claudeStore.addLocalMessage('error', 'Claudeセッションの開始に失敗しました')
+  }
 })
 
-onUnmounted(() => {
-  // TODO: WebSocket接続の切断、リソースのクリーンアップ
+onUnmounted(async () => {
+  try {
+    // Claude セッションを停止
+    await claudeStore.stopSession(sessionData.value.id)
+  } catch (error) {
+    console.error('Claude セッション停止エラー:', error)
+  }
+  
   console.log('ワークスペース終了')
 })
 </script>

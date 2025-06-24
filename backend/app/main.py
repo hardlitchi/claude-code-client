@@ -9,7 +9,7 @@ from fastapi.staticfiles import StaticFiles
 import uvicorn
 
 from .database import Base, engine
-from .routers import auth, sessions, users, terminal
+from .routers import auth, sessions, users, terminal, claude
 
 # データベーステーブル作成
 Base.metadata.create_all(bind=engine)
@@ -37,6 +37,7 @@ app.include_router(auth.router, prefix="/api")
 app.include_router(sessions.router, prefix="/api")
 app.include_router(users.router, prefix="/api")
 app.include_router(terminal.router, prefix="/api")
+app.include_router(claude.router, prefix="/api")
 
 # 静的ファイル配信（将来のフロントエンドビルド用）
 # app.mount("/static", StaticFiles(directory="static"), name="static")
