@@ -70,6 +70,9 @@
                 <button onclick="showDashboard()" class="block w-full text-left px-3 py-2 text-gray-700 hover:bg-gray-100 rounded">
                     📊 ダッシュボード
                 </button>
+                <button onclick="showWorktree()" class="block w-full text-left px-3 py-2 text-gray-700 hover:bg-gray-100 rounded">
+                    🌿 Worktree管理
+                </button>
                 <button onclick="showSettings()" class="block w-full text-left px-3 py-2 text-gray-700 hover:bg-gray-100 rounded">
                     ⚙️ 設定
                 </button>
@@ -97,7 +100,8 @@
                         <span class="text-xs text-gray-600">実行中</span>
                     </div>
                 </div>
-                <p class="text-sm text-gray-600 mb-3">/home/user/projectA</p>
+                <p class="text-sm text-gray-600 mb-1">/home/user/projectA (main)</p>
+                <p class="text-xs text-gray-500 mb-3">🌿 Worktree: 2個 | 並行ブランチ: 2個</p>
                 <div class="flex justify-between items-center">
                     <span class="text-xs text-gray-500">5分前</span>
                     <button onclick="openSession('project-a')" class="px-3 py-1 bg-blue-600 text-white text-sm rounded">
@@ -114,7 +118,8 @@
                         <span class="text-xs text-gray-600">停止中</span>
                     </div>
                 </div>
-                <p class="text-sm text-gray-600 mb-3">/home/user/webapp</p>
+                <p class="text-sm text-gray-600 mb-1">/home/user/webapp (dev)</p>
+                <p class="text-xs text-gray-500 mb-3">🌿 Worktree: 1個 | 並行ブランチ: 1個</p>
                 <div class="flex justify-between items-center">
                     <span class="text-xs text-gray-500">1時間前</span>
                     <button onclick="openSession('webapp-b')" class="px-3 py-1 bg-blue-600 text-white text-sm rounded">
@@ -138,8 +143,8 @@
                     <div class="text-xs text-gray-600">セッション</div>
                 </div>
                 <div>
-                    <div class="text-xl font-bold text-green-600">8h</div>
-                    <div class="text-xs text-gray-600">稼働時間</div>
+                    <div class="text-xl font-bold text-green-600">3</div>
+                    <div class="text-xs text-gray-600">Worktree</div>
                 </div>
                 <div>
                     <div class="text-xl font-bold text-yellow-600">12</div>
@@ -160,7 +165,11 @@
             <div class="flex items-center justify-between">
                 <div class="flex items-center space-x-2">
                     <button onclick="backToDashboard()" class="text-gray-600">←</button>
-                    <h2 class="font-medium text-gray-900">📁 プロジェクトA</h2>
+                    <h2 class="font-medium text-gray-900">📁 プロジェクトA (main)</h2>
+                    <div class="flex items-center space-x-1">
+                        <span class="text-xs text-gray-600">🌿</span>
+                        <button onclick="switchWorktree('feature')" class="px-1 py-0.5 bg-blue-100 text-blue-800 text-xs rounded">feature</button>
+                    </div>
                 </div>
                 <div class="flex items-center space-x-2">
                     <span class="status-indicator status-online"></span>
@@ -172,11 +181,14 @@
         <!-- Tab Navigation -->
         <div class="bg-white border-b">
             <div class="flex">
-                <button id="terminalTab" onclick="switchTab('terminal')" class="flex-1 py-3 px-4 text-sm font-medium tab-active">
+                <button id="terminalTab" onclick="switchTab('terminal')" class="flex-1 py-2 px-2 text-xs font-medium tab-active">
                     Terminal
                 </button>
-                <button id="chatTab" onclick="switchTab('chat')" class="flex-1 py-3 px-4 text-sm font-medium tab-inactive">
+                <button id="chatTab" onclick="switchTab('chat')" class="flex-1 py-2 px-2 text-xs font-medium tab-inactive">
                     Chat
+                </button>
+                <button id="worktreeTab" onclick="switchTab('worktree')" class="flex-1 py-2 px-2 text-xs font-medium tab-inactive">
+                    🌿 Worktree
                 </button>
             </div>
         </div>
@@ -243,6 +255,67 @@
                 </div>
             </div>
         </div>
+        
+        <!-- Worktree Content -->
+        <div id="worktreeContent" class="hidden flex-1 flex flex-col h-96">
+            <div class="flex-1 p-3 overflow-y-auto">
+                <!-- Worktree List -->
+                <div class="space-y-3">
+                    <div class="bg-white rounded-lg p-3 shadow-sm">
+                        <div class="flex items-center justify-between mb-2">
+                            <div class="flex items-center space-x-2">
+                                <span class="text-sm font-medium">main</span>
+                                <span class="px-2 py-0.5 bg-green-100 text-green-800 text-xs rounded">🟢 アクティブ</span>
+                            </div>
+                        </div>
+                        <div class="text-xs text-gray-600 mb-2">./ (メイン)</div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-xs text-gray-500">5分前</span>
+                            <button class="px-2 py-1 bg-blue-600 text-white text-xs rounded">開く</button>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white rounded-lg p-3 shadow-sm">
+                        <div class="flex items-center justify-between mb-2">
+                            <div class="flex items-center space-x-2">
+                                <span class="text-sm font-medium">feature/ui</span>
+                                <span class="px-2 py-0.5 bg-green-100 text-green-800 text-xs rounded">🟢 アクティブ</span>
+                            </div>
+                        </div>
+                        <div class="text-xs text-gray-600 mb-2">../feature-ui</div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-xs text-gray-500">10分前</span>
+                            <div class="flex space-x-1">
+                                <button class="px-2 py-1 bg-blue-600 text-white text-xs rounded">開く</button>
+                                <button class="px-2 py-1 bg-red-600 text-white text-xs rounded">削除</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white rounded-lg p-3 shadow-sm">
+                        <div class="flex items-center justify-between mb-2">
+                            <div class="flex items-center space-x-2">
+                                <span class="text-sm font-medium">hotfix</span>
+                                <span class="px-2 py-0.5 bg-yellow-100 text-yellow-800 text-xs rounded">⏸️ 停止中</span>
+                            </div>
+                        </div>
+                        <div class="text-xs text-gray-600 mb-2">../hotfix</div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-xs text-gray-500">2時間前</span>
+                            <div class="flex space-x-1">
+                                <button class="px-2 py-1 bg-blue-600 text-white text-xs rounded">開く</button>
+                                <button class="px-2 py-1 bg-red-600 text-white text-xs rounded">削除</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="border-t p-3">
+                <button onclick="createNewWorktree()" class="w-full py-2 bg-green-600 text-white rounded text-sm">
+                    + 新しいWorktree作成
+                </button>
+            </div>
+        </div>
     </div>
 
     <!-- Bottom Navigation -->
@@ -300,6 +373,11 @@
             document.getElementById('menuOverlay').classList.add('hidden');
         }
 
+        function showWorktree() {
+            alert('Worktree管理画面（実装予定）');
+            document.getElementById('menuOverlay').classList.add('hidden');
+        }
+
         function showNotifications() {
             alert('通知画面（実装予定）');
         }
@@ -325,19 +403,42 @@
         function switchTab(tab) {
             const terminalTab = document.getElementById('terminalTab');
             const chatTab = document.getElementById('chatTab');
+            const worktreeTab = document.getElementById('worktreeTab');
             const terminalContent = document.getElementById('terminalContent');
             const chatContent = document.getElementById('chatContent');
+            const worktreeContent = document.getElementById('worktreeContent');
+
+            // Reset all tabs
+            terminalTab.className = 'flex-1 py-2 px-2 text-xs font-medium tab-inactive';
+            chatTab.className = 'flex-1 py-2 px-2 text-xs font-medium tab-inactive';
+            worktreeTab.className = 'flex-1 py-2 px-2 text-xs font-medium tab-inactive';
+            
+            // Hide all content
+            terminalContent.classList.add('hidden');
+            chatContent.classList.add('hidden');
+            worktreeContent.classList.add('hidden');
 
             if (tab === 'terminal') {
-                terminalTab.className = 'flex-1 py-3 px-4 text-sm font-medium tab-active';
-                chatTab.className = 'flex-1 py-3 px-4 text-sm font-medium tab-inactive';
+                terminalTab.className = 'flex-1 py-2 px-2 text-xs font-medium tab-active';
                 terminalContent.classList.remove('hidden');
-                chatContent.classList.add('hidden');
-            } else {
-                terminalTab.className = 'flex-1 py-3 px-4 text-sm font-medium tab-inactive';
-                chatTab.className = 'flex-1 py-3 px-4 text-sm font-medium tab-active';
-                terminalContent.classList.add('hidden');
+            } else if (tab === 'chat') {
+                chatTab.className = 'flex-1 py-2 px-2 text-xs font-medium tab-active';
                 chatContent.classList.remove('hidden');
+            } else if (tab === 'worktree') {
+                worktreeTab.className = 'flex-1 py-2 px-2 text-xs font-medium tab-active';
+                worktreeContent.classList.remove('hidden');
+            }
+        }
+        
+        // Worktree functions
+        function switchWorktree(branch) {
+            alert(`Worktreeを${branch}ブランチに切り替えます（実装予定）`);
+        }
+
+        function createNewWorktree() {
+            const branch = prompt('新しいWorktreeのブランチ名を入力してください:');
+            if (branch) {
+                alert(`${branch}ブランチのWorktreeを作成します（実装予定）`);
             }
         }
 

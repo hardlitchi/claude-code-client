@@ -47,6 +47,9 @@
                     <button onclick="showSection('sessions')" id="nav-sessions" class="w-full flex items-center px-4 py-2 text-sm font-medium rounded-lg sidebar-inactive">
                         📺 セッション監視
                     </button>
+                    <button onclick="showSection('worktrees')" id="nav-worktrees" class="w-full flex items-center px-4 py-2 text-sm font-medium rounded-lg sidebar-inactive">
+                        🌿 Worktree管理
+                    </button>
                     <button onclick="showSection('notifications')" id="nav-notifications" class="w-full flex items-center px-4 py-2 text-sm font-medium rounded-lg sidebar-inactive">
                         🔔 通知管理
                     </button>
@@ -119,12 +122,12 @@
                     </div>
                     <div class="bg-white rounded-lg shadow p-6">
                         <div class="flex items-center">
-                            <div class="p-2 bg-yellow-100 rounded-lg">
-                                <span class="text-2xl">💾</span>
+                            <div class="p-2 bg-green-100 rounded-lg">
+                                <span class="text-2xl">🌿</span>
                             </div>
                             <div class="ml-4">
-                                <p class="text-sm font-medium text-gray-600">ディスク使用量</p>
-                                <p class="text-3xl font-bold text-gray-900">67%</p>
+                                <p class="text-sm font-medium text-gray-600">Worktree数</p>
+                                <p class="text-3xl font-bold text-gray-900">156</p>
                             </div>
                         </div>
                     </div>
@@ -474,6 +477,163 @@
                 </div>
             </div>
 
+            <!-- Worktrees Section -->
+            <div id="section-worktrees" class="hidden p-6">
+                <div class="bg-white rounded-lg shadow p-6">
+                    <div class="flex items-center justify-between mb-6">
+                        <h3 class="text-lg font-medium text-gray-900">🌿 Worktree管理</h3>
+                        <div class="flex items-center space-x-2">
+                            <span class="text-sm text-gray-600">自動更新:</span>
+                            <button class="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm">ON</button>
+                        </div>
+                    </div>
+                    
+                    <!-- Worktree Stats -->
+                    <div class="grid grid-cols-4 gap-4 mb-6">
+                        <div class="text-center">
+                            <div class="text-2xl font-bold text-green-600">156</div>
+                            <div class="text-sm text-gray-600">🌿 総Worktree数</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-2xl font-bold text-blue-600">89</div>
+                            <div class="text-sm text-gray-600">🟢 アクティブ</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-2xl font-bold text-yellow-600">12.5GB</div>
+                            <div class="text-sm text-gray-600">💾 使用ディスク量</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-2xl font-bold text-red-600">3</div>
+                            <div class="text-sm text-gray-600">⚠️ 制限超過</div>
+                        </div>
+                    </div>
+
+                    <!-- Filter Section -->
+                    <div class="mb-6 flex items-center space-x-4">
+                        <input type="text" placeholder="ユーザー検索..." class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                        <input type="text" placeholder="リポジトリ検索..." class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                        <select class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                            <option>状態: すべて</option>
+                            <option>アクティブ</option>
+                            <option>停止中</option>
+                            <option>制限超過</option>
+                        </select>
+                    </div>
+
+                    <!-- Worktrees Table -->
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ユーザー</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">リポジトリ</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ブランチ</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">状態</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">サイズ</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">セッション</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                <tr>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">user123</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">project-A</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">main</td>
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">🟢 アクティブ</span>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">1.2GB</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">あり</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                        <button class="text-blue-600 hover:text-blue-900 mr-3">表示</button>
+                                        <button class="text-red-600 hover:text-red-900">削除</button>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">user123</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">project-A</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">feature</td>
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">🟢 アクティブ</span>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">1.5GB</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">あり</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                        <button class="text-blue-600 hover:text-blue-900 mr-3">表示</button>
+                                        <button class="text-red-600 hover:text-red-900">削除</button>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">dev456</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">api-server</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">hotfix</td>
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">⚠️ 制限超過</span>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">3.2GB</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">あり</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                        <button class="text-blue-600 hover:text-blue-900 mr-3">表示</button>
+                                        <button class="text-red-600 hover:text-red-900">削除</button>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">test789</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">mobile-app</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">dev</td>
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">🔴 エラー</span>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">0.8GB</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">なし</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                        <button class="text-blue-600 hover:text-blue-900 mr-3">表示</button>
+                                        <button class="text-red-600 hover:text-red-900">削除</button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Worktree Settings -->
+                    <div class="mt-8">
+                        <h4 class="text-md font-medium text-gray-900 mb-4">⚙️ Worktree制限設定</h4>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div class="space-y-4">
+                                <h5 class="text-sm font-medium text-gray-900">ユーザー別制限</h5>
+                                <div class="flex items-center space-x-4">
+                                    <label class="text-sm text-gray-700">最大Worktree数:</label>
+                                    <input type="number" value="10" class="border border-gray-300 rounded px-2 py-1 w-20">
+                                    <span class="text-sm text-gray-600">個/ユーザー</span>
+                                </div>
+                                <div class="flex items-center space-x-4">
+                                    <label class="text-sm text-gray-700">最大サイズ:</label>
+                                    <input type="number" value="5" class="border border-gray-300 rounded px-2 py-1 w-20">
+                                    <span class="text-sm text-gray-600">GB/Worktree</span>
+                                </div>
+                            </div>
+                            <div class="space-y-4">
+                                <h5 class="text-sm font-medium text-gray-900">自動クリーンアップ</h5>
+                                <label class="flex items-center">
+                                    <input type="checkbox" class="mr-2">
+                                    <span class="text-sm text-gray-700">非アクティブWorktreeを自動削除 (30日後)</span>
+                                </label>
+                                <label class="flex items-center">
+                                    <input type="checkbox" class="mr-2">
+                                    <span class="text-sm text-gray-700">セッション終了時にWorktreeを削除</span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="mt-6 flex space-x-3">
+                            <button class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">選択Worktreeを削除</button>
+                            <button class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">制限超過を解除</button>
+                            <button class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">一括クリーンアップ</button>
+                            <button class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">設定を保存</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Other sections would be implemented similarly -->
             <div id="section-system" class="hidden p-6">
                 <div class="bg-white rounded-lg shadow p-6">
@@ -509,7 +669,7 @@
         // Navigation functions
         function showSection(sectionId) {
             // Hide all sections
-            const sections = ['dashboard', 'users', 'claude-config', 'system', 'sessions', 'notifications', 'logs', 'backup'];
+            const sections = ['dashboard', 'users', 'claude-config', 'system', 'sessions', 'worktrees', 'notifications', 'logs', 'backup'];
             sections.forEach(id => {
                 document.getElementById(`section-${id}`).classList.add('hidden');
                 document.getElementById(`nav-${id}`).className = 'w-full flex items-center px-4 py-2 text-sm font-medium rounded-lg sidebar-inactive';
@@ -526,6 +686,7 @@
                 'claude-config': '🤖 Claude Code設定',
                 'system': '⚙️ システム設定',
                 'sessions': '📺 セッション監視',
+                'worktrees': '🌿 Worktree管理',
                 'notifications': '🔔 通知管理',
                 'logs': '📋 ログ・監視',
                 'backup': '💾 バックアップ管理'
