@@ -97,18 +97,8 @@ export const useAuthStore = defineStore('auth', () => {
     if (!token.value) return
 
     try {
-      // TODO: ユーザー情報取得APIを実装後に有効化
-      // const response = await api.get('/auth/me')
-      // user.value = response.data
-      
-      // 仮のユーザー情報
-      user.value = {
-        id: 1,
-        username: 'testuser',
-        email: 'test@example.com',
-        is_active: true,
-        is_admin: false
-      }
+      const response = await api.get('/users/me')
+      user.value = response.data
     } catch (error) {
       console.error('ユーザー情報取得エラー:', error)
       logout()
