@@ -8,6 +8,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import uvicorn
 
+from .database import Base, engine
+from .routers import auth, sessions
+
+# データベーステーブル作成
+Base.metadata.create_all(bind=engine)
+
 # アプリケーション作成
 app = FastAPI(
     title="Claude Code Client",
@@ -26,6 +32,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# APIルーター登録
+app.include_router(auth.router, prefix="/api")
+app.include_router(sessions.router, prefix="/api")
+
 # 静的ファイル配信（将来のフロントエンドビルド用）
 # app.mount("/static", StaticFiles(directory="static"), name="static")
 
@@ -38,7 +48,7 @@ async def root():
         "status": "running"
     }
 
-@app.get("/health")
+@app.get("/api/health")
 async def health():
     """ヘルスチェックエンドポイント"""
     return {"status": "healthy"}
