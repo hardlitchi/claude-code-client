@@ -15,7 +15,8 @@ python-multipart==0.0.6
 bcrypt==4.0.1
 
 # Claude Code SDK
-# anthropic==0.7.8  # 将来的に追加
+claude-code-sdk==0.0.11
+anthropic==0.25.1
 
 # その他ユーティリティ
 python-dotenv==1.0.0

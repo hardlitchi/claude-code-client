@@ -60,13 +60,14 @@
       <!-- 分割線 -->
       <div class="w-1 bg-gray-300 cursor-col-resize" @mousedown="startResize"></div>
 
-      <!-- Claude Chat側 -->
+      <!-- Claude Code Chat側 -->
       <div class="flex-1 flex flex-col bg-white">
-        <div class="bg-gray-100 px-4 py-2 text-gray-800 text-sm border-b">
-          Claude Chat
+        <div class="bg-gray-100 px-4 py-2 text-gray-800 text-sm border-b flex items-center justify-between">
+          <span>Claude Code Chat</span>
+          <span class="text-xs text-gray-500">統合チャット</span>
         </div>
         
-        <ChatInterface />
+        <ClaudeChatInterface />
       </div>
     </div>
 
@@ -89,7 +90,7 @@
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import Terminal from '../components/Terminal.vue'
-import ChatInterface from '../components/ChatInterface.vue'
+import ClaudeChatInterface from '../components/ClaudeChatInterface.vue'
 import { useClaudeStore } from '../stores/claude'
 import { useWebSocketStore } from '../stores/websocket'
 
