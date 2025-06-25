@@ -29,7 +29,7 @@
             🔔
           </button>
           <button class="text-gray-500 hover:text-gray-700">最小化</button>
-          <button class="text-gray-500 hover:text-gray-700">設定</button>
+          <router-link to="/settings" class="text-gray-500 hover:text-gray-700">設定</router-link>
           <button 
             @click="goBack"
             class="text-gray-500 hover:text-gray-700"
@@ -49,7 +49,7 @@
         </div>
         <div class="flex-1">
           <Terminal 
-            :session-id="sessionData.id"
+            :sessionId="sessionData.id"
             @connected="onTerminalConnected"
             @disconnected="onTerminalDisconnected"
             @error="onTerminalError"
@@ -93,6 +93,7 @@ import Terminal from '../components/Terminal.vue'
 import ClaudeChatInterface from '../components/ClaudeChatInterface.vue'
 import { useClaudeStore } from '../stores/claude'
 import { useWebSocketStore } from '../stores/websocket'
+import { useSessionsStore } from '../stores/sessions'
 
 const route = useRoute()
 const router = useRouter()
@@ -112,6 +113,19 @@ const sessionData = ref<SessionData>({
   name: 'プロジェクトA',
   status: 'running'
 })
+
+// セッション詳細を取得する関数
+const loadSessionData = async () => {
+  try {
+    const sessionsStore = useSessionsStore()
+    const session = await sessionsStore.getSession(route.params.sessionId as string)
+    sessionData.value.name = session.name
+    sessionData.value.status = session.status
+    sessionData.value.workingDirectory = session.working_directory
+  } catch (error) {
+    console.error('セッションデータ取得エラー:', error)
+  }
+}
 const notificationsEnabled = ref(true)
 const connectionStatus = ref<'connected' | 'disconnected'>('connected')
 const sessionDuration = ref('2h 15m')
@@ -161,6 +175,9 @@ onMounted(async () => {
   await nextTick()
   
   try {
+    // セッションデータを読み込み
+    await loadSessionData()
+    
     // WebSocket接続を開始
     await websocketStore.connect(sessionData.value.id)
     

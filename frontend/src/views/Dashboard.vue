@@ -10,8 +10,8 @@
             </h1>
           </div>
           <div class="flex items-center space-x-4">
-            <button class="text-gray-500 hover:text-gray-700">設定</button>
-            <button class="text-gray-500 hover:text-gray-700">プロフィール</button>
+            <router-link to="/settings" class="text-gray-500 hover:text-gray-700">設定</router-link>
+            <router-link to="/profile" class="text-gray-500 hover:text-gray-700">プロフィール</router-link>
             <button class="text-gray-500 hover:text-gray-700" @click="handleLogout">
               ログアウト
             </button>
@@ -143,6 +143,31 @@
             ></textarea>
           </div>
           
+          <div>
+            <label for="workingDirectory" class="block text-sm font-medium text-gray-700 mb-1">
+              ワーキングディレクトリ
+            </label>
+            <div class="flex space-x-2">
+              <input
+                id="workingDirectory"
+                v-model="newSessionWorkingDirectory"
+                type="text"
+                class="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                :placeholder="`例: /home/${authStore.user?.username}/my-project`"
+              />
+              <button
+                type="button"
+                @click="selectDirectory"
+                class="px-3 py-2 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 text-sm"
+              >
+                📁 選択
+              </button>
+            </div>
+            <p class="text-xs text-gray-500 mt-1">
+              空白の場合は自動でディレクトリが作成されます
+            </p>
+          </div>
+          
           <div class="flex justify-end space-x-3 pt-4">
             <button
               type="button"
@@ -179,6 +204,7 @@ const sessionsStore = useSessionsStore()
 const showCreateModal = ref(false)
 const newSessionName = ref('')
 const newSessionDescription = ref('')
+const newSessionWorkingDirectory = ref('')
 
 // 計算されたプロパティ
 const stats = computed(() => ({
@@ -213,15 +239,20 @@ const createNewSession = async () => {
   if (!newSessionName.value.trim()) return
   
   try {
+    // ワーキングディレクトリの決定（ユーザー指定がない場合は自動生成）
+    const workingDir = newSessionWorkingDirectory.value.trim() || 
+      `/home/${authStore.user?.username}/${newSessionName.value.toLowerCase().replace(/\s+/g, '-')}`
+    
     await sessionsStore.createSession({
       name: newSessionName.value,
       description: newSessionDescription.value || undefined,
-      working_directory: `/home/${authStore.user?.username}/${newSessionName.value.toLowerCase().replace(/\s+/g, '-')}`
+      working_directory: workingDir
     })
     
     // フォームをリセット
     newSessionName.value = ''
     newSessionDescription.value = ''
+    newSessionWorkingDirectory.value = ''
     showCreateModal.value = false
   } catch (error) {
     console.error('セッション作成エラー:', error)
@@ -241,6 +272,20 @@ const deleteSession = async (sessionId: string) => {
   } catch (error) {
     console.error('セッション削除エラー:', error)
     alert('セッションの削除に失敗しました')
+  }
+}
+
+// ディレクトリ選択機能
+const selectDirectory = () => {
+  // TODO: ファイルシステムブラウザーやネイティブディレクトリ選択機能の実装
+  // 現在は簡易的なプロンプトで対応
+  const selectedPath = prompt(
+    'ワーキングディレクトリのパスを入力してください',
+    newSessionWorkingDirectory.value || `/home/${authStore.user?.username}/`
+  )
+  
+  if (selectedPath !== null) {
+    newSessionWorkingDirectory.value = selectedPath
   }
 }
 

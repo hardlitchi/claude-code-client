@@ -26,12 +26,24 @@ const router = createRouter({
       name: 'Workspace',
       component: () => import('../views/Workspace.vue'),
       meta: { requiresAuth: true }
+    },
+    {
+      path: '/settings',
+      name: 'Settings',
+      component: () => import('../views/Settings.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/profile',
+      name: 'Profile',
+      component: () => import('../views/Profile.vue'),
+      meta: { requiresAuth: true }
     }
   ]
 })
 
 // 認証ガード
-router.beforeEach(async (to, from, next) => {
+router.beforeEach(async (to, _from, next) => {
   const authStore = useAuthStore()
   
   // トークンがある場合はユーザー情報を確認
