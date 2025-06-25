@@ -21,8 +21,7 @@ class ConnectionManager:
         self.session_connections: Dict[str, List[str]] = {}  # session_id -> [user_ids]
         
     async def connect(self, websocket: WebSocket, user_id: str, session_id: str):
-        """WebSocket接続を受け入れ"""
-        await websocket.accept()
+        """WebSocket接続を管理に追加（acceptは呼び出し元で実行済み）"""
         connection_id = f"{user_id}_{session_id}_{datetime.now().timestamp()}"
         
         self.active_connections[connection_id] = websocket

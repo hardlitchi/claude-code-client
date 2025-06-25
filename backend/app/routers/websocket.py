@@ -139,27 +139,35 @@ WebSocketエンドポイント
     user_id = None
     
     try:
+        client_info = f"{websocket.client.host}:{websocket.client.port}" if websocket.client else "不明"
+        logger.info(f"WebSocket接続試行: session_id={session_id}, client={client_info}, token={'有り' if token else '無し'}")
+        
+        # 事前検証（acceptする前に実行）
         # 認証確認
         if not token:
-            await websocket.close(code=4001, reason="認証トークンが必要です")
-            return
+            logger.warning("認証トークンが提供されていません")
+            return  # acceptせずに終了
             
         try:
             user = await get_current_user_ws(token, db)
             user_id = str(user.id)
         except Exception as e:
             logger.error(f"認証エラー: {e}")
-            await websocket.close(code=4003, reason="認証に失敗しました")
-            return
+            return  # acceptせずに終了
             
-        # セッションの存在確認
-        session = db.query(Session).filter(Session.id == session_id).first()
+        # セッションの存在確認（session_idで検索）
+        session = db.query(Session).filter(Session.session_id == session_id).first()
         if not session:
-            await websocket.close(code=4004, reason="セッションが見つかりません")
-            return
+            logger.warning(f"セッションが見つかりません: session_id={session_id}")
+            return  # acceptせずに終了
+            
+        # すべての検証が通った場合のみWebSocket接続を受け入れ
+        await websocket.accept()
+        logger.info(f"WebSocket接続を受け入れました: session_id={session_id}, user_id={user_id}")
             
         # WebSocket接続を確立
         connection_id = await manager.connect(websocket, user_id, session_id)
+        logger.info(f"WebSocket接続成功: connection_id={connection_id}, user_id={user_id}, session_id={session_id}")
         
         # 接続成功メッセージを送信
         welcome_msg = WebSocketMessage(
@@ -207,6 +215,12 @@ WebSocketエンドポイント
         logger.info(f"WebSocket接続が切断されました: {connection_id}")
     except Exception as e:
         logger.error(f"WebSocketエラー: {e}")
+        # エラーが発生した場合、接続が確立されていればcloseする
+        try:
+            if connection_id:  # 接続が確立されていた場合
+                await websocket.close(code=1011, reason="内部サーバーエラー")
+        except Exception:
+            pass  # すでに閉じられている場合は無視
     finally:
         if connection_id and user_id:
             manager.disconnect(connection_id, user_id, session_id)
