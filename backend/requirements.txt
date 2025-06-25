@@ -27,6 +27,9 @@ email-validator==2.1.0
 watchdog==3.0.0
 aiofiles==23.2.0
 
+# HTTP クライアント・通知
+aiohttp==3.9.1
+
 # 開発・テスト用
 pytest==7.4.3
 pytest-asyncio==0.21.1
