@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import uvicorn
 
-from .routers import auth, sessions, users, terminal, claude, websocket, files, projects, notifications
+from .routers import auth, sessions, users, terminal, claude, websocket, files, projects, notifications, collaboration
 from .init_db import init_database
 import logging
 
@@ -54,6 +54,7 @@ app.include_router(websocket.router, prefix="/api")
 app.include_router(files.router)
 app.include_router(projects.router)
 app.include_router(notifications.router)
+app.include_router(collaboration.router)
 
 # 静的ファイル配信（将来のフロントエンドビルド用）
 # app.mount("/static", StaticFiles(directory="static"), name="static")
