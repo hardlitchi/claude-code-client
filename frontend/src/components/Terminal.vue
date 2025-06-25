@@ -6,8 +6,8 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
-// import { Terminal } from 'xterm'
-// import { FitAddon } from 'xterm-addon-fit'
+// import { Terminal } from '@xterm/xterm'
+// import { FitAddon } from '@xterm/addon-fit'
 
 interface Props {
   sessionId: string
@@ -102,8 +102,8 @@ const initializeTerminal = async () => {
     
     /* 
     // 実際のxterm.js実装（依存関係インストール後に有効化）
-    const { Terminal } = await import('xterm')
-    const { FitAddon } = await import('xterm-addon-fit')
+    const { Terminal } = await import('@xterm/xterm')
+    const { FitAddon } = await import('@xterm/addon-fit')
     
     terminal = new Terminal({
       cursorBlink: true,

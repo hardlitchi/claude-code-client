@@ -84,6 +84,19 @@ class SessionList(BaseModel):
     sessions: List[Session]
     total: int
 
+# メッセージ関連スキーマ
+class MessageRequest(BaseModel):
+    message: str
+
+class MessageResponse(BaseModel):
+    response: str
+    session_id: str
+    timestamp: datetime
+    
+class MessageHistory(BaseModel):
+    messages: List[dict]
+    session_id: str
+
 # システム情報スキーマ
 class SystemStatus(BaseModel):
     status: str
