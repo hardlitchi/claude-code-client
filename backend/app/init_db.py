@@ -2,6 +2,7 @@
 データベース初期化とシードデータ投入
 """
 
+import os
 from sqlalchemy.orm import Session
 from .database import SessionLocal, engine, Base
 from .models import User
@@ -64,6 +65,11 @@ def create_default_users():
 
 def init_database():
     """データベースを初期化"""
+    # テスト環境では初期化をスキップ
+    if os.getenv("TESTING"):
+        logger.info("Skipping database initialization in test environment")
+        return
+        
     logger.info("Initializing database...")
     create_tables()
     create_default_users()

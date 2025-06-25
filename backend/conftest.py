@@ -15,8 +15,12 @@ from app.models import User
 from app.auth import get_password_hash
 
 
-# テスト用データベース設定
-SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
+# テスト環境フラグを設定
+import os
+os.environ["TESTING"] = "1"
+
+# テスト用インメモリSQLiteデータベース設定
+SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
 )
