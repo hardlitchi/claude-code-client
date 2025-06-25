@@ -99,6 +99,23 @@ async def get_current_active_user(current_user: User = Depends(get_current_user)
         )
     return current_user
 
+async def get_current_user_ws(token: str, db: Session) -> User:
+    """WebSocket用の現在のユーザー取得"""
+    try:
+        token_data = verify_token(token)
+        user = db.query(User).filter(User.username == token_data.username).first()
+        if user is None or not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="認証に失敗しました"
+            )
+        return user
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="認証に失敗しました"
+        )
+
 def create_user(db: Session, username: str, password: str, email: Optional[str] = None) -> User:
     """ユーザー作成"""
     # 既存ユーザーチェック

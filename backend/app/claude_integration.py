@@ -114,5 +114,21 @@ class ClaudeIntegrationManager:
         """アクティブなセッション一覧を取得"""
         return list(self.active_sessions.keys())
 
+class ClaudeIntegration:
+    """WebSocket用のClaude統合クラス"""
+    
+    def __init__(self):
+        self.manager = ClaudeIntegrationManager()
+    
+    async def send_message(self, message: str, session_id: str = None) -> str:
+        """メッセージをClaude Codeに送信"""
+        if session_id:
+            session = await self.manager.get_session(session_id)
+            if session:
+                return await session.send_message(message)
+        
+        # デフォルトの応答
+        return f"Claude: {message} に対する応答です。（WebSocket経由）"
+
 # グローバルインスタンス
 claude_manager = ClaudeIntegrationManager()

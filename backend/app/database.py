@@ -9,21 +9,29 @@ from sqlalchemy.pool import StaticPool
 import os
 
 # データベースURL設定
-DATABASE_URL = os.getenv(
-    "DATABASE_URL", 
-    "postgresql://claude_user:claude_password@db:5432/claude_db"
-)
-
-# SQLite を開発時のフォールバックとして使用
-if "postgresql" not in DATABASE_URL:
-    DATABASE_URL = "sqlite:///./claude_client.db"
+if os.getenv("TESTING"):
+    # テスト環境ではインメモリSQLiteを使用
+    DATABASE_URL = "sqlite:///:memory:"
     engine = create_engine(
         DATABASE_URL,
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
 else:
-    engine = create_engine(DATABASE_URL)
+    DATABASE_URL = os.getenv(
+        "DATABASE_URL", 
+        "sqlite:///./claude_client.db"  # 本番環境以外のフォールバック
+    )
+    
+    # SQLiteの場合の特別な設定
+    if DATABASE_URL.startswith("sqlite"):
+        engine = create_engine(
+            DATABASE_URL,
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
+    else:
+        engine = create_engine(DATABASE_URL)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import uvicorn
 
-from .routers import auth, sessions, users, terminal, claude
+from .routers import auth, sessions, users, terminal, claude, websocket
 from .init_db import init_database
 import logging
 
@@ -16,12 +16,14 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# データベース初期化
-try:
-    init_database()
-except Exception as e:
-    logger.error(f"Database initialization failed: {e}")
-    raise
+# データベース初期化（テスト時は無視）
+import os
+if not os.getenv("TESTING"):
+    try:
+        init_database()
+    except Exception as e:
+        logger.error(f"Database initialization failed: {e}")
+        raise
 
 # アプリケーション作成
 app = FastAPI(
@@ -33,9 +35,10 @@ app = FastAPI(
 )
 
 # CORS設定
+cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],  # Vue.js開発サーバー
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -47,6 +50,7 @@ app.include_router(sessions.router, prefix="/api")
 app.include_router(users.router, prefix="/api")
 app.include_router(terminal.router, prefix="/api")
 app.include_router(claude.router, prefix="/api")
+app.include_router(websocket.router, prefix="/api")
 
 # 静的ファイル配信（将来のフロントエンドビルド用）
 # app.mount("/static", StaticFiles(directory="static"), name="static")
