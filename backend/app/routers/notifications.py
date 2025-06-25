@@ -521,10 +521,10 @@ async def trigger_event(
     session_id: str,
     event_type: str,
     event_data: Dict[str, Any],
-    severity: str = "info",
     background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
-    db: DBSession = Depends(get_db)
+    db: DBSession = Depends(get_db),
+    severity: str = "info"
 ):
     """イベントを手動でトリガー"""
     # セッションの存在確認と権限チェック
