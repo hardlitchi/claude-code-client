@@ -20,7 +20,8 @@ from .schemas import TokenData
 # 設定
 SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-this-in-production")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_HOURS = 24
+ACCESS_TOKEN_EXPIRE_HOURS = 1  # アクセストークンは1時間
+REFRESH_TOKEN_EXPIRE_DAYS = 30  # リフレッシュトークンは30日
 
 # パスワードハッシュ化
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -44,16 +45,68 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     else:
         expire = datetime.utcnow() + timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS)
     
-    to_encode.update({"exp": expire})
+    to_encode.update({"exp": expire, "type": "access"})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
-def verify_token(token: str) -> TokenData:
+def create_refresh_token(data: dict, expires_delta: Optional[timedelta] = None):
+    """リフレッシュトークン作成"""
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    
+    to_encode.update({"exp": expire, "type": "refresh"})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+def create_token_pair(user: User, db: Session, ip_address: str = None, user_agent: str = None):
+    """アクセストークンとリフレッシュトークンのペアを作成"""
+    token_data = {"sub": user.username, "user_id": user.id}
+    
+    # アクセストークン作成
+    access_token = create_access_token(token_data)
+    access_token_expires = timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS)
+    
+    # リフレッシュトークン作成
+    refresh_token = create_refresh_token(token_data)
+    refresh_token_expires = timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    
+    # リフレッシュトークンをデータベースに保存
+    token_id = str(uuid.uuid4())
+    db_token = AuthToken(
+        token_id=token_id,
+        user_id=user.id,
+        token_type="refresh",
+        expires_at=datetime.utcnow() + refresh_token_expires,
+        ip_address=ip_address,
+        user_agent=user_agent
+    )
+    db.add(db_token)
+    db.commit()
+    
+    # ユーザーの最終ログイン時刻を更新
+    user.last_login = datetime.utcnow()
+    user.login_count += 1
+    db.commit()
+    
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+        "expires_in": int(access_token_expires.total_seconds()),
+        "refresh_expires_in": int(refresh_token_expires.total_seconds())
+    }
+
+def verify_token(token: str, expected_type: str = "access") -> TokenData:
     """トークン検証"""
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
-        if username is None:
+        token_type: str = payload.get("type")
+        
+        if username is None or token_type != expected_type:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="無効なトークンです",
@@ -66,6 +119,67 @@ def verify_token(token: str) -> TokenData:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="無効なトークンです",
             headers={"WWW-Authenticate": "Bearer"},
+        )
+
+def refresh_access_token(refresh_token: str, db: Session, ip_address: str = None, user_agent: str = None):
+    """リフレッシュトークンを使用してアクセストークンを更新"""
+    try:
+        # リフレッシュトークンを検証
+        payload = jwt.decode(refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        token_type: str = payload.get("type")
+        
+        if username is None or token_type != "refresh":
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="無効なリフレッシュトークンです",
+            )
+        
+        # ユーザーを取得
+        user = db.query(User).filter(User.username == username).first()
+        if not user or not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="ユーザーが見つからないか無効です",
+            )
+        
+        # データベース内のリフレッシュトークンを確認（セキュリティ強化）
+        db_token = db.query(AuthToken).filter(
+            AuthToken.user_id == user.id,
+            AuthToken.token_type == "refresh",
+            AuthToken.is_active == True,
+            AuthToken.expires_at > datetime.utcnow()
+        ).first()
+        
+        if not db_token:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="リフレッシュトークンが無効または期限切れです",
+            )
+        
+        # 新しいアクセストークンを作成
+        token_data = {"sub": user.username, "user_id": user.id}
+        access_token = create_access_token(token_data)
+        access_token_expires = timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS)
+        
+        # トークンの最終使用時刻を更新
+        db_token.last_used = datetime.utcnow()
+        if ip_address:
+            db_token.ip_address = ip_address
+        if user_agent:
+            db_token.user_agent = user_agent
+        db.commit()
+        
+        return {
+            "access_token": access_token,
+            "token_type": "bearer",
+            "expires_in": int(access_token_expires.total_seconds())
+        }
+        
+    except JWTError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="無効なリフレッシュトークンです",
         )
 
 def authenticate_user(db: Session, username: str, password: str) -> Optional[User]:
@@ -139,3 +253,48 @@ def create_user(db: Session, username: str, password: str, email: Optional[str] 
     db.commit()
     db.refresh(db_user)
     return db_user
+
+def revoke_token(refresh_token: str, db: Session) -> bool:
+    """リフレッシュトークンを取り消し"""
+    try:
+        payload = jwt.decode(refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        token_type: str = payload.get("type")
+        
+        if username is None or token_type != "refresh":
+            return False
+        
+        # ユーザーを取得
+        user = db.query(User).filter(User.username == username).first()
+        if not user:
+            return False
+        
+        # データベース内のリフレッシュトークンを無効化
+        db_token = db.query(AuthToken).filter(
+            AuthToken.user_id == user.id,
+            AuthToken.token_type == "refresh",
+            AuthToken.is_active == True
+        ).first()
+        
+        if db_token:
+            db_token.is_active = False
+            db.commit()
+            return True
+        
+        return False
+        
+    except JWTError:
+        return False
+
+def revoke_all_user_tokens(user_id: int, db: Session) -> bool:
+    """ユーザーの全トークンを取り消し（ログアウト全デバイス）"""
+    try:
+        # ユーザーの全リフレッシュトークンを無効化
+        db.query(AuthToken).filter(
+            AuthToken.user_id == user_id,
+            AuthToken.is_active == True
+        ).update({"is_active": False})
+        db.commit()
+        return True
+    except Exception:
+        return False
