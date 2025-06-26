@@ -45,6 +45,7 @@ class User(Base):
     notification_settings = relationship("NotificationSetting", back_populates="user")
     notification_history = relationship("NotificationHistory", back_populates="user")
     file_operations = relationship("FileOperation", back_populates="user")
+    subscriptions = relationship("Subscription", back_populates="user")
 
 class Session(Base):
     """Claude Code セッションモデル"""
@@ -55,6 +56,7 @@ class Session(Base):
     name = Column(String(100), nullable=False)
     description = Column(Text)
     status = Column(String(20), default="stopped")  # running, stopped, error, starting, stopping
+    terminal_type = Column(String(20), default="basic")  # basic, claude
     
     # 技術情報
     working_directory = Column(String(500))
@@ -421,4 +423,124 @@ class EventLog(Base):
     event_type = Column(String(50), nullable=False)
     event_data = Column(Text)
     severity = Column(String(10), default="info")  # info, warning, error, success
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class Subscription(Base):
+    """サブスクリプションモデル"""
+    __tablename__ = "subscriptions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    subscription_id = Column(String(36), unique=True, index=True, nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    
+    # プラン情報
+    plan_type = Column(String(20), nullable=False)  # free, pro, enterprise
+    plan_name = Column(String(50), nullable=False)
+    status = Column(String(20), default="active")  # active, cancelled, expired, suspended
+    
+    # 料金情報
+    monthly_price = Column(Integer, default=0)  # 円（税込）
+    billing_cycle = Column(String(20), default="monthly")  # monthly, yearly
+    currency = Column(String(3), default="JPY")
+    
+    # 利用制限
+    limits = Column(JSONB, default=lambda: {
+        "claude_sessions": 0,  # Claudeターミナル同時セッション数
+        "claude_tokens_per_month": 0,  # 月間Claude API使用トークン数
+        "storage_gb": 5,  # ストレージ容量（GB）
+        "concurrent_sessions": 5,  # 同時セッション数
+        "api_calls_per_hour": 1000  # API呼び出し制限（時間あたり）
+    })
+    
+    # 使用状況
+    usage = Column(JSONB, default=lambda: {
+        "claude_tokens_used": 0,
+        "storage_used_gb": 0,
+        "current_sessions": 0,
+        "api_calls_today": 0
+    })
+    
+    # 支払い情報
+    payment_method = Column(String(20))  # stripe, paypal, bank_transfer
+    external_subscription_id = Column(String(100))  # Stripe subscription ID等
+    
+    # 期間
+    starts_at = Column(DateTime(timezone=True), server_default=func.now())
+    ends_at = Column(DateTime(timezone=True))
+    next_billing_date = Column(DateTime(timezone=True))
+    cancelled_at = Column(DateTime(timezone=True))
+    
+    # 更新情報
+    auto_renew = Column(Boolean, default=True)
+    cancellation_reason = Column(Text)
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    # リレーション
+    user = relationship("User", back_populates="subscriptions")
+
+class SubscriptionPlan(Base):
+    """サブスクリプションプランマスター"""
+    __tablename__ = "subscription_plans"
+
+    id = Column(Integer, primary_key=True, index=True)
+    plan_id = Column(String(36), unique=True, index=True, nullable=False)
+    
+    # プラン基本情報
+    name = Column(String(50), nullable=False)
+    display_name = Column(String(100), nullable=False)
+    description = Column(Text)
+    plan_type = Column(String(20), nullable=False)  # free, pro, enterprise
+    
+    # 料金設定
+    monthly_price = Column(Integer, default=0)
+    yearly_price = Column(Integer, default=0)
+    currency = Column(String(3), default="JPY")
+    
+    # 機能制限
+    features = Column(JSONB, default=lambda: {
+        "claude_sessions": 0,
+        "claude_tokens_per_month": 0,
+        "storage_gb": 5,
+        "concurrent_sessions": 5,
+        "api_calls_per_hour": 1000,
+        "priority_support": False,
+        "collaboration": False,
+        "webhook_integrations": False
+    })
+    
+    # 表示・販売設定
+    is_active = Column(Boolean, default=True)
+    is_visible = Column(Boolean, default=True)
+    sort_order = Column(Integer, default=0)
+    
+    # 外部連携
+    stripe_price_id_monthly = Column(String(100))
+    stripe_price_id_yearly = Column(String(100))
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+class UsageLog(Base):
+    """使用量ログモデル"""
+    __tablename__ = "usage_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    session_id = Column(String(36), ForeignKey("sessions.session_id"))
+    
+    # 使用量情報
+    usage_type = Column(String(30), nullable=False)  # claude_tokens, api_call, storage, session_time
+    amount = Column(Integer, default=0)
+    unit = Column(String(20), default="count")  # tokens, bytes, seconds, count
+    
+    # 課金情報
+    cost_yen = Column(Integer, default=0)
+    billing_period = Column(String(7))  # YYYY-MM形式
+    
+    # メタデータ
+    usage_metadata = Column(JSONB, default=lambda: {})
+    terminal_type = Column(String(20))  # basic, claude
+    
     created_at = Column(DateTime(timezone=True), server_default=func.now())

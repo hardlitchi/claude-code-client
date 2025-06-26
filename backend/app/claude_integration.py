@@ -1,28 +1,44 @@
 """
-Claude Code SDK統合
+Claude Code統合
 
-Claude Code SDKを使用してブラウザベースでClaude開発セッションを提供します。
+Claude Code SDK/CLIを使用してブラウザベースでClaude開発セッションを提供します。
 """
 
 import asyncio
+import json
 import logging
 import os
+import subprocess
 from pathlib import Path
 from typing import Dict, List, Optional, AsyncGenerator
 from datetime import datetime
 
+# Claude Code SDKの利用可能性をチェック
 try:
-    from claude_code_sdk import query, ClaudeCodeOptions, Message
-    from claude_code_sdk import (
-        CLINotFoundError,
-        ProcessError,
-        CLIJSONDecodeError,
-        CLIConnectionError
-    )
+    from claude_code_sdk import query, ClaudeCodeOptions
     SDK_AVAILABLE = True
+    logging.info("Claude Code SDK found and loaded")
 except ImportError:
     SDK_AVAILABLE = False
-    logging.warning("Claude Code SDK not available. Using mock implementation.")
+    logging.warning("Claude Code SDK not available")
+
+# Claude Code CLIの利用可能性をチェック
+try:
+    result = subprocess.run(['which', 'claude'], capture_output=True, text=True)
+    CLI_AVAILABLE = result.returncode == 0
+    if CLI_AVAILABLE:
+        # バージョン確認
+        version_result = subprocess.run(['claude', '--version'], capture_output=True, text=True)
+        logging.info(f"Claude Code CLI found: {version_result.stdout.strip()}")
+    else:
+        logging.warning("Claude Code CLI not found in PATH")
+except Exception as e:
+    CLI_AVAILABLE = False
+    logging.warning(f"Claude Code CLI check failed: {e}")
+
+# 使用する方法を決定（SDK優先）
+USE_SDK = SDK_AVAILABLE
+USE_CLI = CLI_AVAILABLE and not SDK_AVAILABLE
 
 logger = logging.getLogger(__name__)
 
@@ -36,26 +52,47 @@ class ClaudeCodeSession:
         self.is_active = False
         self.created_at = datetime.now()
         self.messages: List[Dict] = []
-        self.options = self._create_options()
+        self.cli_env = self._create_cli_env()
     
-    def _create_options(self) -> "ClaudeCodeOptions":
-        """Claude Code SDKオプションを作成"""
+    def _create_cli_env(self) -> Dict[str, str]:
+        """Claude Code CLI用の環境変数を作成"""
+        env = os.environ.copy()
+        if self.working_directory.exists():
+            env['PWD'] = str(self.working_directory)
+        return env
+    
+    def _create_sdk_options(self) -> Optional["ClaudeCodeOptions"]:
+        """Claude Code SDK用のオプションを作成"""
         if not SDK_AVAILABLE:
             return None
-            
-        return ClaudeCodeOptions(
-            system_prompt=self.system_prompt,
-            cwd=self.working_directory,
-            allowed_tools=["Read", "Write", "Bash", "Glob", "Grep", "Edit", "MultiEdit"],
-            permission_mode="acceptEdits",
-            max_turns=10
-        )
+        try:
+            return ClaudeCodeOptions(
+                system_prompt=self.system_prompt,
+                cwd=str(self.working_directory),
+                allowed_tools=["Read", "Write", "Bash", "Glob", "Grep", "Edit", "MultiEdit"],
+                permission_mode="acceptEdits",
+                max_turns=10
+            )
+        except Exception as e:
+            logger.error(f"SDK options creation failed: {e}")
+            return None
+    
+    def _optimize_prompt_for_cost(self, message: str) -> str:
+        """開発用: API コストを最小化するためプロンプトを最適化"""
+        # 短い応答を要求することでコストを削減
+        if len(message) > 200:
+            # 長いメッセージは要約
+            return f"簡潔に回答してください: {message[:200]}..."
+        
+        # 開発専用の指示を追加
+        optimized = f"{message}\n\n[開発モード: 簡潔で実用的な回答をお願いします]"
+        return optimized
     
     async def start_session(self) -> bool:
         """Claude Code セッションを開始"""
         try:
-            if not SDK_AVAILABLE:
-                logger.warning("Claude Code SDK not available, using mock mode")
+            if not (USE_SDK or USE_CLI):
+                logger.warning("Claude Code SDK/CLI not available, using mock mode")
                 self.is_active = True
                 self.add_message("system", "Claude Code セッション（モックモード）が開始されました")
                 return True
@@ -65,9 +102,10 @@ class ClaudeCodeSession:
                 self.working_directory.mkdir(parents=True, exist_ok=True)
                 logger.info(f"作業ディレクトリを作成しました: {self.working_directory}")
             
+            method = "SDK" if USE_SDK else "CLI"
             self.is_active = True
-            self.add_message("system", f"Claude Code セッションが開始されました（作業ディレクトリ: {self.working_directory}）")
-            logger.info(f"Claude Code session started: {self.session_id}")
+            self.add_message("system", f"Claude Code セッション（{method}）が開始されました（作業ディレクトリ: {self.working_directory}）")
+            logger.info(f"Claude Code session started using {method}: {self.session_id}")
             return True
             
         except Exception as e:
@@ -94,61 +132,107 @@ class ClaudeCodeSession:
         try:
             self.add_message("user", message)
             
-            if not SDK_AVAILABLE:
-                # モック応答
-                mock_response = f"Claude（モック）: {message} に対する応答です。実際のClaude Code SDK統合が完了すると、より高度な開発支援が可能になります。"
+            # モック応答
+            if not (USE_SDK or USE_CLI):
+                if "hello" in message.lower() or "こんにちは" in message.lower():
+                    mock_response = "こんにちは！Claude Code（モック）です。プロジェクトの開発をお手伝いします。ファイルの作成、編集、コマンド実行などをサポートできます。"
+                elif "file" in message.lower() or "ファイル" in message:
+                    mock_response = f"ファイル操作について承知しました。現在の作業ディレクトリは {self.working_directory} です。ファイルの作成や編集をお手伝いできます。（モックモード）"
+                elif "code" in message.lower() or "コード" in message:
+                    mock_response = "コード生成・編集をお手伝いします。どのような言語で、どのような機能を実装したいですか？（モックモード）"
+                else:
+                    mock_response = f"Claude（モック）: 「{message}」についてお答えします。実際のClaude Code SDK/CLI統合が完了すると、ファイル操作、コード生成、ターミナル操作など、より高度な開発支援が可能になります。\n\n現在は API クレジット不足のため、モックモードで動作しています。"
+                
                 self.add_message("claude", mock_response)
                 yield mock_response
                 return
-            
-            full_response = ""
-            try:
-                async for response_message in query(prompt=message, options=self.options):
-                    content = ""
+
+            # SDKを使用する場合（開発者モード）
+            if USE_SDK:
+                try:
+                    # 開発効率化: 短縮プロンプトで課金最小化
+                    optimized_message = self._optimize_prompt_for_cost(message)
                     
-                    # メッセージタイプに応じて内容を抽出
-                    if hasattr(response_message, 'content'):
-                        if isinstance(response_message.content, str):
-                            content = response_message.content
-                        elif isinstance(response_message.content, list):
-                            # AssistantMessageの場合はcontentブロックのリスト
-                            for block in response_message.content:
-                                if hasattr(block, 'text'):
-                                    content += block.text
-                    elif hasattr(response_message, 'data'):
-                        # SystemMessageの場合
-                        content = str(response_message.data)
+                    options = self._create_sdk_options()
+                    if not options:
+                        raise Exception("SDK options creation failed")
                     
-                    if content:
-                        full_response += content
-                        yield content
+                    full_response = ""
                     
-            except CLINotFoundError:
-                error_msg = "Claude Code CLIが見つかりません。npm install -g @anthropic-ai/claude-code で インストールしてください。"
-                logger.error(error_msg)
-                self.add_message("error", error_msg)
-                yield error_msg
-                
-            except ProcessError as e:
-                error_msg = f"Claude Code プロセスエラー: {str(e)}"
-                logger.error(error_msg)
-                self.add_message("error", error_msg)
-                yield error_msg
-                
-            except CLIJSONDecodeError as e:
-                error_msg = f"Claude Code 応答解析エラー: {str(e)}"
-                logger.error(error_msg)
-                self.add_message("error", error_msg)
-                yield error_msg
-                
-            except CLIConnectionError as e:
-                error_msg = f"Claude Code 接続エラー: {str(e)}"
-                logger.error(error_msg)
-                self.add_message("error", error_msg)
-                yield error_msg
-            
-            if full_response:
-                self.add_message("claude", full_response)
+                    # TaskGroup例外を適切に処理するためtry-except内でasyncループを実行
+                    try:
+                        async for response_chunk in query(prompt=optimized_message, options=options):
+                            if hasattr(response_chunk, 'content') and response_chunk.content:
+                                chunk = str(response_chunk.content)
+                                full_response += chunk
+                                yield chunk
+                    except* Exception as exc_group:
+                        # TaskGroupのExceptionGroupを処理
+                        for exc in exc_group.exceptions:
+                            logger.error(f"SDK TaskGroup exception: {exc}")
+                        raise Exception(f"SDK TaskGroup error: {len(exc_group.exceptions)} sub-exceptions")
+                    
+                    if full_response:
+                        self.add_message("claude", full_response)
+                    return
+                    
+                except Exception as e:
+                    logger.error(f"SDK error: {e}")
+                    error_msg = f"Claude Code SDK エラー: {str(e)}"
+                    self.add_message("error", error_msg)
+                    yield error_msg
+                    return
+
+            # CLIを使用する場合
+            if USE_CLI:
+                try:
+                    # Claude Code CLIを実行（非対話型）
+                    cmd = ['claude', '--print', message]
+                    
+                    # プロセスを開始
+                    process = await asyncio.create_subprocess_exec(
+                        *cmd,
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.PIPE,
+                        cwd=str(self.working_directory),
+                        env=self.cli_env
+                    )
+                    
+                    # プロセス完了を待機
+                    stdout, stderr = await process.communicate()
+                    
+                    if process.returncode == 0:
+                        # 成功時の応答を処理
+                        response = stdout.decode('utf-8')
+                        self.add_message("claude", response)
+                        yield response
+                    else:
+                        # エラー時の処理
+                        error_output = stderr.decode('utf-8').strip()
+                        if "Credit balance is too low" in error_output:
+                            error_msg = "Claude API クレジット残高が不足しています。Anthropic Console でクレジットを追加してください。"
+                        elif "API key" in error_output.lower():
+                            error_msg = "Claude API キーが無効または未設定です。ANTHROPIC_API_KEY 環境変数を確認してください。"
+                        elif "rate limit" in error_output.lower():
+                            error_msg = "Claude API のレート制限に達しました。しばらく待ってから再試行してください。"
+                        else:
+                            error_msg = f"Claude Code CLI エラー: {error_output}"
+                        
+                        logger.error(error_msg)
+                        self.add_message("error", error_msg)
+                        yield error_msg
+                        
+                except FileNotFoundError:
+                    error_msg = "Claude Code CLIが見つかりません。npm install -g @anthropic-ai/claude-code でインストールしてください。"
+                    logger.error(error_msg)
+                    self.add_message("error", error_msg)
+                    yield error_msg
+                    
+                except Exception as e:
+                    error_msg = f"Claude Code プロセスエラー: {str(e)}"
+                    logger.error(error_msg)
+                    self.add_message("error", error_msg)
+                    yield error_msg
                 
         except Exception as e:
             error_msg = f"予期しないエラー: {str(e)}"
