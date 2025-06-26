@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import uvicorn
 
-from .routers import auth, sessions, users, terminal, claude, websocket, files, projects, notifications, collaboration
+from .routers import auth, sessions, users, terminal, claude, websocket, files, projects, notifications, collaboration, subscriptions
 from .init_db import init_database
 import logging
 
@@ -51,6 +51,7 @@ app.include_router(users.router, prefix="/api")
 app.include_router(terminal.router, prefix="/api")
 app.include_router(claude.router, prefix="/api")
 app.include_router(websocket.router, prefix="/api")
+app.include_router(subscriptions.router, prefix="/api")
 app.include_router(files.router)
 app.include_router(projects.router)
 app.include_router(notifications.router)

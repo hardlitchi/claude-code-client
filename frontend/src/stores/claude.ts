@@ -79,11 +79,12 @@ export const useClaudeStore = defineStore('claude', () => {
     }
   }
 
-  const sendMessage = async (sessionId: string, message: string): Promise<string> => {
+  const sendMessage = async (sessionId: string, message: string, stream: boolean = false): Promise<string> => {
     isLoading.value = true
     try {
       const response = await apiClient.post(`/claude/sessions/${sessionId}/message`, {
-        message
+        message,
+        stream
       })
       
       // メッセージ履歴を更新
@@ -92,6 +93,76 @@ export const useClaudeStore = defineStore('claude', () => {
       return response.data.claude_response
     } catch (error) {
       console.error('Claude メッセージ送信エラー:', error)
+      throw error
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  const sendMessageStream = async (
+    sessionId: string, 
+    message: string, 
+    onChunk: (chunk: string) => void
+  ): Promise<void> => {
+    isLoading.value = true
+    try {
+      // ユーザーメッセージを即座に追加
+      addLocalMessage('user', message)
+      
+      const response = await fetch(`/api/claude/sessions/${sessionId}/message`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${useAuthStore().token}`
+        },
+        body: JSON.stringify({
+          message,
+          stream: true
+        })
+      })
+
+      if (!response.body) {
+        throw new Error('ストリーミング応答がサポートされていません')
+      }
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let claudeResponse = ''
+
+      // Claude応答用のメッセージを追加
+      const claudeMessageIndex = messages.value.length
+      addLocalMessage('claude', '')
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+
+          const chunk = decoder.decode(value, { stream: true })
+          const lines = chunk.split('\n')
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const data = line.slice(6)
+              if (data === '[DONE]') {
+                return
+              }
+              
+              claudeResponse += data
+              onChunk(data)
+              
+              // リアルタイムでメッセージを更新
+              if (messages.value[claudeMessageIndex]) {
+                messages.value[claudeMessageIndex].content = claudeResponse
+              }
+            }
+          }
+        }
+      } finally {
+        reader.releaseLock()
+      }
+    } catch (error) {
+      console.error('Claude ストリーミングメッセージ送信エラー:', error)
       throw error
     } finally {
       isLoading.value = false
@@ -142,6 +213,7 @@ export const useClaudeStore = defineStore('claude', () => {
     startSession,
     stopSession,
     sendMessage,
+    sendMessageStream,
     fetchMessages,
     fetchSessionStatus,
     clearMessages,

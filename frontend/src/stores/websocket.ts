@@ -45,7 +45,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
     try {
       disconnect() // 既存の接続をクリーンアップ
       
-      const baseWsUrl = import.meta.env.VITE_WEBSOCKET_URL || 'ws://localhost:8000'
+      const baseWsUrl = 'ws://localhost:8000'
       const wsUrl = `${baseWsUrl}/api/ws/${sessionId}?token=${authStore.token}`
       socket.value = new WebSocket(wsUrl)
       currentSessionId.value = sessionId

@@ -63,3 +63,15 @@ Key architectural components expected:
 - Git リポジトリ（リモートはまだ未設定）
 - IDE 統合準備済み（.vscode、.idea パターンを gitignore に含む）
 - Abstra フレームワーク統合予定（.abstra/ ディレクトリを無視）
+
+## 📋 開発進捗管理
+
+**重要**: 開発作業の進捗は以下のファイルで管理しています：
+
+- **TODO リスト**: [.claude/notes/todo-list.md](.claude/notes/todo-list.md)
+  - 実装予定機能の一覧
+  - 進捗状況の追跡
+  - 既知の問題と修正予定
+  - 次回作業予定
+
+このファイルは開発作業の都度更新され、現在の実装状況と次に行うべき作業を明確化しています。新しい開発セッションを開始する際は、必ずこのTODOリストを確認してください。

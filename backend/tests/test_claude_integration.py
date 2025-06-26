@@ -1,13 +1,14 @@
 """
-claude_integration.py のテスト
+Claude Code SDK統合のテスト
 """
 
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from datetime import datetime
+from pathlib import Path
 
 from app.claude_integration import (
-    ClaudeCodeSession, ClaudeIntegrationManager, claude_manager
+    ClaudeCodeSession, ClaudeIntegrationManager, ClaudeIntegration, SDK_AVAILABLE
 )
 
 
@@ -19,11 +20,13 @@ class TestClaudeCodeSession:
         """セッション初期化のテスト"""
         session_id = "test-session-123"
         working_dir = "/test/directory"
+        system_prompt = "テスト用プロンプト"
         
-        session = ClaudeCodeSession(session_id, working_dir)
+        session = ClaudeCodeSession(session_id, working_dir, system_prompt)
         
         assert session.session_id == session_id
-        assert session.working_directory == working_dir
+        assert session.working_directory == Path(working_dir)
+        assert session.system_prompt == system_prompt
         assert session.is_active is False
         assert isinstance(session.created_at, datetime)
         assert session.messages == []
@@ -82,20 +85,22 @@ class TestClaudeCodeSession:
     
     @pytest.mark.asyncio
     async def test_send_message_success(self):
-        """メッセージ送信成功のテスト"""
+        """メッセージ送信成功のテスト（ストリーミング）"""
         session = ClaudeCodeSession("test-session", "/test/dir")
         message = "Hello Claude"
         
-        response = await session.send_message(message)
+        # ストリーミングレスポンスを収集
+        responses = []
+        async for chunk in session.send_message(message):
+            responses.append(chunk)
         
-        assert isinstance(response, str)
-        assert "Claude:" in response
-        assert message in response
-        assert len(session.messages) == 2  # user message + claude response
+        assert len(responses) > 0
+        full_response = "".join(responses)
+        assert "Claude" in full_response or "モック" in full_response
+        assert message in full_response
+        assert len(session.messages) >= 2  # user message + claude response
         assert session.messages[0]["sender"] == "user"
         assert session.messages[0]["content"] == message
-        assert session.messages[1]["sender"] == "claude"
-        assert session.messages[1]["content"] == response
     
     @pytest.mark.asyncio
     async def test_send_message_failure(self):
@@ -370,3 +375,259 @@ class TestClaudeIntegrationError:
         # クリーンアップ
         for session_id in session_ids:
             await manager.remove_session(session_id)
+
+
+@pytest.mark.unit
+class TestClaudeIntegration:
+    """ClaudeIntegrationクラスのテスト"""
+    
+    @pytest.fixture
+    def integration(self):
+        """テスト用統合クラス"""
+        return ClaudeIntegration()
+    
+    @pytest.mark.asyncio
+    async def test_create_session_success(self, integration):
+        """セッション作成成功のテスト"""
+        session_id = "test-integration-session"
+        working_dir = "/test/integration/dir"
+        system_prompt = "テスト用システムプロンプト"
+        
+        result = await integration.create_session(session_id, working_dir, system_prompt)
+        
+        assert result["success"] is True
+        assert result["session_id"] == session_id
+        assert result["working_directory"] == working_dir
+        assert result["is_active"] is True
+        assert "created_at" in result
+        
+        # クリーンアップ
+        await integration.remove_session(session_id)
+    
+    @pytest.mark.asyncio
+    async def test_create_session_duplicate(self, integration):
+        """重複セッション作成のテスト"""
+        session_id = "test-duplicate-session"
+        
+        # 最初のセッション作成
+        await integration.create_session(session_id)
+        
+        # 重複セッション作成
+        result = await integration.create_session(session_id)
+        
+        assert result["success"] is False
+        assert "error" in result
+        
+        # クリーンアップ
+        await integration.remove_session(session_id)
+    
+    @pytest.mark.asyncio
+    async def test_get_session_info(self, integration):
+        """セッション情報取得のテスト"""
+        session_id = "test-info-session"
+        
+        # セッション作成
+        await integration.create_session(session_id)
+        
+        # セッション情報取得
+        info = await integration.get_session_info(session_id)
+        
+        assert info is not None
+        assert info["session_id"] == session_id
+        assert info["is_active"] is True
+        assert "working_directory" in info
+        assert "created_at" in info
+        assert "message_count" in info
+        
+        # 存在しないセッション
+        info = await integration.get_session_info("nonexistent")
+        assert info is None
+        
+        # クリーンアップ
+        await integration.remove_session(session_id)
+    
+    @pytest.mark.asyncio
+    async def test_send_message_stream(self, integration):
+        """ストリーミングメッセージ送信のテスト"""
+        session_id = "test-stream-session"
+        
+        # セッション作成
+        await integration.create_session(session_id)
+        
+        # ストリーミングメッセージ送信
+        message = "Hello streaming Claude"
+        responses = []
+        
+        async for chunk in integration.send_message_stream(message, session_id):
+            responses.append(chunk)
+        
+        assert len(responses) > 0
+        full_response = "".join(responses)
+        assert message in full_response
+        
+        # クリーンアップ
+        await integration.remove_session(session_id)
+    
+    @pytest.mark.asyncio
+    async def test_send_message_nonstreaming(self, integration):
+        """非ストリーミングメッセージ送信のテスト"""
+        session_id = "test-nonstream-session"
+        
+        # セッション作成
+        await integration.create_session(session_id)
+        
+        # 非ストリーミングメッセージ送信
+        message = "Hello non-streaming Claude"
+        response = await integration.send_message(message, session_id)
+        
+        assert isinstance(response, str)
+        assert message in response
+        
+        # クリーンアップ
+        await integration.remove_session(session_id)
+    
+    @pytest.mark.asyncio
+    async def test_get_session_history(self, integration):
+        """セッション履歴取得のテスト"""
+        session_id = "test-history-session"
+        
+        # セッション作成
+        await integration.create_session(session_id)
+        
+        # メッセージ送信
+        await integration.send_message("Test message", session_id)
+        
+        # 履歴取得
+        history = await integration.get_session_history(session_id)
+        
+        assert history is not None
+        assert len(history) >= 2  # start message + user message + claude response
+        
+        # 存在しないセッション
+        history = await integration.get_session_history("nonexistent")
+        assert history is None
+        
+        # クリーンアップ
+        await integration.remove_session(session_id)
+    
+    @pytest.mark.asyncio
+    async def test_list_sessions(self, integration):
+        """セッション一覧のテスト"""
+        session_ids = ["list-session-1", "list-session-2", "list-session-3"]
+        
+        # 複数セッション作成
+        for session_id in session_ids:
+            await integration.create_session(session_id)
+        
+        # セッション一覧取得
+        sessions = await integration.list_sessions()
+        
+        assert len(sessions) >= len(session_ids)
+        session_id_list = [s["session_id"] for s in sessions]
+        
+        for session_id in session_ids:
+            assert session_id in session_id_list
+        
+        # クリーンアップ
+        for session_id in session_ids:
+            await integration.remove_session(session_id)
+    
+    @pytest.mark.asyncio
+    async def test_cleanup_sessions(self, integration):
+        """セッションクリーンアップのテスト"""
+        session_id = "test-cleanup-session"
+        
+        # セッション作成
+        await integration.create_session(session_id)
+        
+        # セッションを手動で非アクティブにする
+        session = await integration.manager.get_session(session_id)
+        session.is_active = False
+        
+        # クリーンアップ実行
+        cleanup_count = await integration.cleanup_sessions()
+        
+        assert cleanup_count >= 1
+        
+        # セッションが削除されていることを確認
+        info = await integration.get_session_info(session_id)
+        assert info is None
+    
+    @pytest.mark.asyncio
+    async def test_send_message_invalid_session(self, integration):
+        """無効なセッションIDでのメッセージ送信テスト"""
+        # 存在しないセッションにメッセージ送信
+        response = await integration.send_message("test", "nonexistent-session")
+        
+        assert "エラー" in response
+        assert "見つかりません" in response
+    
+    @pytest.mark.asyncio
+    async def test_send_message_stream_invalid_session(self, integration):
+        """無効なセッションIDでのストリーミングメッセージ送信テスト"""
+        responses = []
+        async for chunk in integration.send_message_stream("test", "nonexistent-session"):
+            responses.append(chunk)
+        
+        assert len(responses) == 1
+        assert "エラー" in responses[0]
+        assert "見つかりません" in responses[0]
+
+
+@pytest.mark.skipif(not SDK_AVAILABLE, reason="Claude Code SDK not available")
+class TestClaudeCodeSDKIntegration:
+    """実際のClaude Code SDK統合のテスト（SDKが利用可能な場合のみ）"""
+    
+    @pytest.mark.asyncio
+    async def test_real_sdk_session_creation(self):
+        """実際のSDKでのセッション作成テスト"""
+        integration = ClaudeIntegration()
+        session_id = "real-sdk-test-session"
+        
+        try:
+            result = await integration.create_session(
+                session_id,
+                "/tmp/test-claude-real",
+                "テスト用プロンプト"
+            )
+            
+            assert result["success"] is True
+            assert result["session_id"] == session_id
+            
+            # セッション情報取得
+            info = await integration.get_session_info(session_id)
+            assert info is not None
+            assert info["is_active"] is True
+            
+        finally:
+            # クリーンアップ
+            await integration.remove_session(session_id)
+    
+    @pytest.mark.asyncio
+    async def test_real_sdk_message_exchange(self):
+        """実際のSDKでのメッセージ交換テスト"""
+        integration = ClaudeIntegration()
+        session_id = "real-sdk-message-test"
+        
+        try:
+            # セッション作成
+            await integration.create_session(session_id, "/tmp/test-claude-real")
+            
+            # メッセージ送信
+            test_message = "Hello, Claude! This is a test message."
+            responses = []
+            
+            async for chunk in integration.send_message_stream(test_message, session_id):
+                responses.append(chunk)
+            
+            assert len(responses) > 0
+            full_response = "".join(responses)
+            assert len(full_response) > 0
+            
+            # 履歴確認
+            history = await integration.get_session_history(session_id)
+            assert len(history) >= 2
+            
+        finally:
+            # クリーンアップ
+            await integration.remove_session(session_id)

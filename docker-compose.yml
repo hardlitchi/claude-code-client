@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # PostgreSQL データベース
   db:
@@ -33,8 +31,13 @@ services:
       - POSTGRES_USER=claude_user
       - POSTGRES_PASSWORD=claude_password
       - CORS_ORIGINS=http://localhost:3001,http://127.0.0.1:3001,https://code.pve.hidearea.net,https://front.claude.code.pve.hidearea.net,https://back.claude.code.pve.hidearea.net
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - CLAUDE_CODE_CONFIG_DIR=/app/.config/claude-code
+      - CLAUDE_CODE_SESSIONS_DIR=/app/claude-sessions
     volumes:
       - ./backend:/app
+      - claude_sessions:/app/claude-sessions
+      - claude_config:/app/.config/claude-code
     ports:
       - "8000:8000"
     depends_on:
@@ -56,3 +59,5 @@ services:
 
 volumes:
   postgres_data:
+  claude_sessions:
+  claude_config:

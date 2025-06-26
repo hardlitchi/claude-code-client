@@ -14,54 +14,13 @@ from sqlalchemy.orm import Session as DBSession
 from sqlalchemy import Column, String, Text, DateTime, Boolean, Integer
 
 from ..database import get_db, Base, engine
-from ..models import User, Session
+from ..models import User, Session, NotificationSetting, NotificationHistory, WebhookLog, EventLog
 from ..auth import get_current_user
 from ..websocket_manager import manager
 
 router = APIRouter(prefix="/api/notifications", tags=["notifications"])
 
-# 通知設定モデル
-class NotificationSetting(Base):
-    __tablename__ = "notification_settings"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, index=True)
-    session_id = Column(String, nullable=True)
-    type = Column(String)  # "browser", "webhook", "email"
-    config = Column(Text)  # JSON形式の設定
-    enabled = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.now)
-    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
-
-# Webhookログモデル
-class WebhookLog(Base):
-    __tablename__ = "webhook_logs"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, index=True)
-    session_id = Column(String, nullable=True)
-    webhook_url = Column(String)
-    event_type = Column(String)
-    payload = Column(Text)
-    response_status = Column(Integer, nullable=True)
-    response_body = Column(Text, nullable=True)
-    success = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.now)
-
-# イベントログモデル
-class EventLog(Base):
-    __tablename__ = "event_logs"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, index=True)
-    session_id = Column(String, nullable=True)
-    event_type = Column(String)
-    event_data = Column(Text)
-    severity = Column(String, default="info")  # "info", "warning", "error", "success"
-    created_at = Column(DateTime, default=datetime.now)
-
-# テーブル作成
-Base.metadata.create_all(bind=engine)
+# テーブル作成は init_db で行うため、ここでは行わない
 
 # リクエストモデル
 class NotificationSettingRequest(BaseModel):

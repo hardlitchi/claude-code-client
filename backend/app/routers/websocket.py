@@ -34,6 +34,8 @@ Claude CodeとのWebSocket通信を処理するクラス
         """チャットメッセージを処理"""
         try:
             user_message = message.data.get("message", "")
+            stream = message.data.get("stream", True)  # デフォルトでストリーミング
+            
             if not user_message:
                 return
                 
@@ -43,33 +45,37 @@ Claude CodeとのWebSocket通信を処理するクラス
                 {
                     "message": user_message,
                     "sender": "user",
-                    "user_id": message.user_id
+                    "user_id": message.user_id,
+                    "timestamp": datetime.now().isoformat()
                 },
                 user_id=message.user_id,
                 session_id=message.session_id
             )
             await manager.broadcast_to_session(user_msg.to_dict(), message.session_id)
             
-            # Claude Codeにメッセージを送信（暂定実装）
-            claude_response = await self._get_claude_response(user_message)
-            
-            # Claudeのレスポンスをセッション内にブロードキャスト
-            claude_msg = WebSocketMessage(
-                MessageType.CHAT,
-                {
-                    "message": claude_response,
-                    "sender": "claude",
-                    "model": "claude-3-sonnet"
-                },
-                session_id=message.session_id
-            )
-            await manager.broadcast_to_session(claude_msg.to_dict(), message.session_id)
+            # Claude Code統合でストリーミング応答を処理
+            if stream:
+                await self._handle_claude_streaming(user_message, message.session_id)
+            else:
+                claude_response = await self._get_claude_response(user_message, message.session_id)
+                # Claudeのレスポンスをセッション内にブロードキャスト
+                claude_msg = WebSocketMessage(
+                    MessageType.CHAT,
+                    {
+                        "message": claude_response,
+                        "sender": "claude",
+                        "model": "claude-code",
+                        "timestamp": datetime.now().isoformat()
+                    },
+                    session_id=message.session_id
+                )
+                await manager.broadcast_to_session(claude_msg.to_dict(), message.session_id)
             
         except Exception as e:
             logger.error(f"チャットメッセージ処理エラー: {e}")
             error_msg = WebSocketMessage(
                 MessageType.ERROR,
-                {"error": "メッセージの処理中にエラーが発生しました"},
+                {"error": f"メッセージの処理中にエラーが発生しました: {str(e)}"},
                 session_id=message.session_id
             )
             await manager.broadcast_to_session(error_msg.to_dict(), message.session_id)
@@ -106,14 +112,59 @@ Claude CodeとのWebSocket通信を処理するクラス
             )
             await manager.broadcast_to_session(error_msg.to_dict(), message.session_id)
             
-    async def _get_claude_response(self, message: str) -> str:
-        """
-Claude Codeからレスポンスを取得（暂定実装）
-        """
-        # 実際の実装ではClaude Code APIを呼び出し
-        # 現在はモックレスポンスを返す
-        await self.claude_integration.send_message(message)  # 準備中
-        return f"Claude: {message}に対するレスポンスです。（暂定実装）"
+    async def _get_claude_response(self, message: str, session_id: str) -> str:
+        """Claude Codeからレスポンスを取得"""
+        try:
+            response = await self.claude_integration.send_message(message, session_id)
+            return response
+        except Exception as e:
+            logger.error(f"Claude応答取得エラー: {e}")
+            return f"エラー: Claude Code統合でエラーが発生しました - {str(e)}"
+    
+    async def _handle_claude_streaming(self, message: str, session_id: str):
+        """Claude Codeからのストリーミング応答を処理"""
+        try:
+            chunk_buffer = ""
+            async for chunk in self.claude_integration.send_message_stream(message, session_id):
+                chunk_buffer += chunk
+                
+                # チャンクをWebSocketでブロードキャスト
+                stream_msg = WebSocketMessage(
+                    MessageType.CHAT,
+                    {
+                        "message_chunk": chunk,
+                        "sender": "claude",
+                        "model": "claude-code",
+                        "streaming": True,
+                        "timestamp": datetime.now().isoformat()
+                    },
+                    session_id=session_id
+                )
+                await manager.broadcast_to_session(stream_msg.to_dict(), session_id)
+            
+            # ストリーミング完了メッセージ
+            complete_msg = WebSocketMessage(
+                MessageType.CHAT,
+                {
+                    "message": chunk_buffer,
+                    "sender": "claude",
+                    "model": "claude-code",
+                    "streaming": False,
+                    "complete": True,
+                    "timestamp": datetime.now().isoformat()
+                },
+                session_id=session_id
+            )
+            await manager.broadcast_to_session(complete_msg.to_dict(), session_id)
+            
+        except Exception as e:
+            logger.error(f"Claude ストリーミング処理エラー: {e}")
+            error_msg = WebSocketMessage(
+                MessageType.ERROR,
+                {"error": f"Claude ストリーミング処理でエラーが発生しました: {str(e)}"},
+                session_id=session_id
+            )
+            await manager.broadcast_to_session(error_msg.to_dict(), session_id)
         
     async def _execute_command(self, command: str) -> str:
         """

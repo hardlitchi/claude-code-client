@@ -1,5 +1,5 @@
 # FastAPI および関連ライブラリ
-fastapi==0.104.1
+fastapi==0.115.6
 uvicorn[standard]==0.24.0
 websockets==12.0
 
@@ -12,10 +12,11 @@ psycopg2-binary==2.9.9
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 python-multipart==0.0.6
-bcrypt==4.1.2
+bcrypt==4.0.1
 
 # Claude Code SDK
-# anthropic==0.7.8  # 将来的に追加
+claude-code-sdk==0.0.11
+anthropic==0.25.1
 
 # その他ユーティリティ
 python-dotenv==1.0.0

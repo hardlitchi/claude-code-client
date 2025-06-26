@@ -1,114 +1,65 @@
 """
 Terminal WebSocket 接続のAPIルーター
+基本ターミナル（無料版）とClaudeターミナル（有料版）をサポート
 """
 
 import asyncio
-import os
-import pty
-import subprocess
-import select
+import logging
 from typing import Dict
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, HTTPException, status
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..auth import get_current_active_user
-from ..models import User, Session as SessionModel
+from ..models import User, Session as SessionModel, Subscription
+from ..terminal_managers import (
+    get_terminal_manager, 
+    has_active_terminal, 
+    get_active_terminal, 
+    set_active_terminal, 
+    remove_active_terminal,
+    ClaudeTerminalManager
+)
 
 router = APIRouter(prefix="/terminal", tags=["Terminal"])
+logger = logging.getLogger(__name__)
 
-# アクティブなターミナル接続を管理
-active_terminals: Dict[str, dict] = {}
-
-class TerminalManager:
-    def __init__(self, session_id: str, working_directory: str = "/tmp"):
-        self.session_id = session_id
-        self.working_directory = working_directory
-        self.master_fd = None
-        self.slave_fd = None
-        self.process = None
-        
-    async def start_terminal(self):
-        """ターミナルプロセスを開始"""
-        try:
-            # 作業ディレクトリが存在しない場合は作成
-            os.makedirs(self.working_directory, exist_ok=True)
-            
-            # pseudoterminal を作成
-            self.master_fd, self.slave_fd = pty.openpty()
-            
-            # シェルプロセスを開始
-            self.process = subprocess.Popen(
-                ['/bin/bash'],
-                stdin=self.slave_fd,
-                stdout=self.slave_fd,
-                stderr=self.slave_fd,
-                cwd=self.working_directory,
-                env=os.environ.copy(),
-                preexec_fn=os.setsid
-            )
-            
-            # 初期化コマンドを送信
-            initial_commands = [
-                f"cd {self.working_directory}",
-                "export PS1='\\u@\\h:\\w$ '",
-                "clear"
-            ]
-            
-            for cmd in initial_commands:
-                os.write(self.master_fd, f"{cmd}\n".encode())
-                await asyncio.sleep(0.1)
-                
-        except Exception as e:
-            print(f"Terminal start error: {e}")
-            raise e
+def check_claude_access(user: User, db: Session) -> bool:
+    """ユーザーがClaudeターミナルにアクセス可能かチェック"""
+    # 管理者ユーザーは常にアクセス可能
+    if user.is_admin:
+        return True
     
-    async def read_output(self):
-        """ターミナル出力を読み取り"""
-        try:
-            # ノンブロッキング読み取り
-            ready, _, _ = select.select([self.master_fd], [], [], 0.1)
-            if ready:
-                data = os.read(self.master_fd, 1024)
-                return data.decode('utf-8', errors='ignore')
-        except Exception as e:
-            print(f"Terminal read error: {e}")
-        return None
+    subscription = db.query(Subscription).filter(
+        Subscription.user_id == user.id,
+        Subscription.status == "active"
+    ).first()
     
-    async def write_input(self, data: str):
-        """ターミナルに入力を送信"""
-        try:
-            os.write(self.master_fd, data.encode())
-        except Exception as e:
-            print(f"Terminal write error: {e}")
+    if not subscription:
+        return False
     
-    def cleanup(self):
-        """リソースをクリーンアップ"""
-        try:
-            if self.process:
-                self.process.terminate()
-                self.process.wait(timeout=5)
-        except:
-            pass
-        
-        try:
-            if self.master_fd:
-                os.close(self.master_fd)
-            if self.slave_fd:
-                os.close(self.slave_fd)
-        except:
-            pass
+    # Freeプランは基本ターミナルのみ
+    if subscription.plan_type == "free":
+        return False
+    
+    # Pro/Enterpriseプランの制限をチェック
+    limits = subscription.limits or {}
+    claude_sessions = limits.get("claude_sessions", 0)
+    
+    return claude_sessions > 0
 
 @router.websocket("/ws/{session_id}")
 async def websocket_terminal(
     websocket: WebSocket,
     session_id: str,
+    terminal_type: str = Query(default="basic", description="Terminal type: basic or claude"),
     db: Session = Depends(get_db)
 ):
     """Terminal WebSocket接続"""
     await websocket.accept()
     
     try:
+        logger.info(f"Terminal WebSocket接続試行: session_id={session_id}, terminal_type={terminal_type}")
         # TODO: 認証チェック（WebSocketでの認証は複雑なので後で実装）
         # 現在は簡単な実装
         
@@ -119,19 +70,48 @@ async def websocket_terminal(
             await websocket.close()
             return
         
-        # ターミナルマネージャーを作成
-        working_dir = session.working_directory or "/tmp"
-        terminal = TerminalManager(session_id, working_dir)
+        # ユーザー情報を取得（本来はWebSocket認証から）
+        user = db.query(User).filter(User.id == session.user_id).first()
+        if not user:
+            await websocket.send_text("ERROR: ユーザーが見つかりません")
+            await websocket.close()
+            return
         
-        # ターミナルを開始
-        await terminal.start_terminal()
-        active_terminals[session_id] = {
-            'terminal': terminal,
-            'websocket': websocket
-        }
+        # Claudeターミナルのアクセス権限をチェック
+        if terminal_type == "claude" and not check_claude_access(user, db):
+            await websocket.send_text("ERROR: Claudeターミナルの利用にはProプラン以上のサブスクリプションが必要です")
+            await websocket.close()
+            return
         
-        # 初期メッセージを送信
-        await websocket.send_text(f"Terminal connected to session: {session.name}\n")
+        # セッション設定を更新
+        session.terminal_type = terminal_type
+        db.commit()
+        
+        # ターミナルタイプ別のセッションIDを作成
+        terminal_session_id = f"{session_id}_{terminal_type}"
+        
+        # 既存のターミナルセッションがあるかチェック
+        if has_active_terminal(terminal_session_id):
+            # 既存セッションを使用
+            terminal = get_active_terminal(terminal_session_id)
+            await websocket.send_text(f"Terminal reconnected to existing {terminal_type} session: {session.name}\n")
+            logger.info(f"Terminal session restored: {terminal_session_id}")
+        else:
+            # 新しいターミナルマネージャーを作成
+            working_dir = session.working_directory or "/tmp"
+            terminal = get_terminal_manager(
+                session_id=terminal_session_id,
+                terminal_type=terminal_type,
+                working_directory=working_dir
+            )
+            
+            # ターミナルを開始
+            await terminal.start_terminal()
+            set_active_terminal(terminal_session_id, terminal)
+            
+            # 初期メッセージを送信
+            terminal_name = "Claude統合" if terminal_type == "claude" else "基本"
+            await websocket.send_text(f"{terminal_name}ターミナルに接続しました: {session.name}\n")
         
         # 出力読み取りタスクを開始
         async def read_terminal_output():
@@ -160,26 +140,85 @@ async def websocket_terminal(
             print(f"Terminal WebSocket disconnected: {session_id}")
         
         finally:
-            # クリーンアップ
+            # クリーンアップ（ただし、ターミナルプロセスは保持）
             output_task.cancel()
-            terminal.cleanup()
-            if session_id in active_terminals:
-                del active_terminals[session_id]
+            # WebSocket切断時もターミナルプロセスは継続実行
+            logger.info(f"Terminal WebSocket disconnected but session preserved: {session_id}")
     
     except Exception as e:
-        print(f"Terminal WebSocket error: {e}")
+        logger.error(f"Terminal WebSocket error: {e}")
         await websocket.send_text(f"ERROR: {str(e)}")
         await websocket.close()
 
 @router.get("/{session_id}/status")
 async def get_terminal_status(
     session_id: str,
-    current_user: User = Depends(get_current_active_user)
+    terminal_type: str = Query(default="basic", description="Terminal type: basic or claude"),
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
 ):
     """ターミナル接続状態を取得"""
-    is_connected = session_id in active_terminals
+    session = db.query(SessionModel).filter(
+        SessionModel.session_id == session_id,
+        SessionModel.user_id == current_user.id
+    ).first()
+    
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="セッションが見つかりません"
+        )
+    
+    terminal_session_id = f"{session_id}_{terminal_type}"
+    is_connected = has_active_terminal(terminal_session_id)
+    terminal = get_active_terminal(terminal_session_id) if is_connected else None
+    
     return {
         "session_id": session_id,
+        "terminal_session_id": terminal_session_id,
+        "terminal_type": terminal_type,
         "connected": is_connected,
-        "status": "active" if is_connected else "inactive"
+        "status": "active" if is_connected else "inactive",
+        "manager_type": terminal.__class__.__name__ if terminal else None
     }
+
+@router.delete("/{session_id}")
+async def terminate_terminal_session(
+    session_id: str,
+    terminal_type: str = Query(default="all", description="Terminal type: basic, claude, or all"),
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """ターミナルセッションを完全に終了"""
+    session = db.query(SessionModel).filter(
+        SessionModel.session_id == session_id,
+        SessionModel.user_id == current_user.id
+    ).first()
+    
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="セッションが見つかりません"
+        )
+    
+    terminated_sessions = []
+    
+    if terminal_type == "all":
+        # 全てのターミナルタイプを終了
+        for t_type in ["basic", "claude"]:
+            terminal_session_id = f"{session_id}_{t_type}"
+            if has_active_terminal(terminal_session_id):
+                remove_active_terminal(terminal_session_id)
+                terminated_sessions.append(terminal_session_id)
+    else:
+        # 指定されたタイプのみ終了
+        terminal_session_id = f"{session_id}_{terminal_type}"
+        if has_active_terminal(terminal_session_id):
+            remove_active_terminal(terminal_session_id)
+            terminated_sessions.append(terminal_session_id)
+    
+    if terminated_sessions:
+        return {"message": f"Terminal sessions terminated: {', '.join(terminated_sessions)}"}
+    else:
+        return {"message": f"No active terminal sessions found for {session_id}"}
+
