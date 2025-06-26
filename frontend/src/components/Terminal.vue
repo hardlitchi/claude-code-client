@@ -132,7 +132,7 @@ const availableTabs = computed(() => {
   ]
 })
 
-const connectWebSocket = (type: 'basic' | 'claude', retryCount: number = 0) => {
+const connectWebSocket = (type: 'basic' | 'claude', retryCount: number = 0, isManualReconnect: boolean = false) => {
   const instance = terminalInstances.value[type]
   const maxRetries = 3
   
@@ -189,12 +189,17 @@ const connectWebSocket = (type: 'basic' | 'claude', retryCount: number = 0) => {
     console.log(`Terminal WebSocket disconnected (${type}):`, event.code, event.reason)
     emit('disconnected')
     
-    // 自動再接続（非正常終了の場合）
-    if (event.code !== 1000 && retryCount < maxRetries) {
+    // 自動再接続は手動再接続の場合のみ実行
+    // 基本ターミナルとClaudeターミナル共に、意図的な切断として扱い、タブ切り替え時のみ再接続
+    const shouldAutoReconnect = isManualReconnect
+    
+    if (shouldAutoReconnect && event.code !== 1000 && retryCount < maxRetries) {
       console.log(`Retrying WebSocket connection in ${(retryCount + 1) * 2} seconds...`)
       setTimeout(() => {
-        connectWebSocket(type, retryCount + 1)
+        connectWebSocket(type, retryCount + 1, isManualReconnect)
       }, (retryCount + 1) * 2000) // 2秒、4秒、6秒で再試行
+    } else if (!shouldAutoReconnect && event.code !== 1000) {
+      console.log(`Terminal WebSocket disconnected (${type}): 自動再接続は無効です。別のタブに切り替えてから戻ると再接続されます。`)
     }
   }
   
@@ -234,8 +239,8 @@ const switchTerminalType = async (type: 'basic' | 'claude') => {
     await initializeTerminal(type)
   }
   
-  // WebSocket接続を確立
-  connectWebSocket(type)
+  // WebSocket接続を確立（タブ切り替え時は手動再接続として扱う）
+  connectWebSocket(type, 0, true)
   
   // ターミナルサイズを調整（切り替え後に必要）
   await nextTick()
@@ -330,7 +335,7 @@ onMounted(async () => {
   await nextTick()
   // 初期は基本ターミナルを初期化
   await initializeTerminal('basic')
-  connectWebSocket('basic')
+  connectWebSocket('basic', 0, true) // 初期接続も手動再接続として扱う
   
   // バーチャルキーボードイベントリスナー
   window.addEventListener('virtual-key', handleVirtualKey)
@@ -378,9 +383,9 @@ defineExpose({
       instance.websocket = null
     }
     
-    // 再接続
+    // 再接続（手動再接続として扱う）
     setTimeout(() => {
-      connectWebSocket(type)
+      connectWebSocket(type, 0, true)
     }, 1000)
   }
 })
