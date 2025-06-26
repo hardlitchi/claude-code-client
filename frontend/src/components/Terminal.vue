@@ -132,8 +132,9 @@ const availableTabs = computed(() => {
   ]
 })
 
-const connectWebSocket = (type: 'basic' | 'claude') => {
+const connectWebSocket = (type: 'basic' | 'claude', retryCount: number = 0) => {
   const instance = terminalInstances.value[type]
+  const maxRetries = 3
   
   // 既存の接続があれば切断
   if (instance.websocket) {
@@ -141,13 +142,38 @@ const connectWebSocket = (type: 'basic' | 'claude') => {
   }
   
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  const host = window.location.hostname
-  const port = process.env.NODE_ENV === 'development' ? '8000' : window.location.port
-  const wsUrl = `${protocol}//${host}:${port}/api/terminal/ws/${props.sessionId}?terminal_type=${type}`
+  let wsUrl: string
   
+  // 環境変数による WebSocket URL のオーバーライド
+  const customWsUrl = import.meta.env.VITE_WEBSOCKET_URL
+  
+  if (customWsUrl) {
+    // カスタム WebSocket URL が設定されている場合
+    wsUrl = `${customWsUrl}/api/terminal/ws/${props.sessionId}?terminal_type=${type}`
+  } else if (process.env.NODE_ENV === 'development') {
+    // 開発環境: 直接バックエンドに接続
+    const host = window.location.hostname
+    const port = '8000'
+    wsUrl = `${protocol}//${host}:${port}/api/terminal/ws/${props.sessionId}?terminal_type=${type}`
+  } else {
+    // 本番環境: 現在のホストを使用（リバースプロキシ経由）
+    const host = window.location.host
+    wsUrl = `${protocol}//${host}/api/terminal/ws/${props.sessionId}?terminal_type=${type}`
+  }
+  
+  console.log(`Attempting WebSocket connection to: ${wsUrl} (attempt ${retryCount + 1})`)
   instance.websocket = new WebSocket(wsUrl)
   
+  // 接続タイムアウト設定
+  const connectionTimeout = setTimeout(() => {
+    if (instance.websocket && instance.websocket.readyState === WebSocket.CONNECTING) {
+      console.warn(`WebSocket connection timeout for ${type}`)
+      instance.websocket.close()
+    }
+  }, 10000) // 10秒タイムアウト
+  
   instance.websocket.onopen = () => {
+    clearTimeout(connectionTimeout)
     console.log(`Terminal WebSocket connected (${type})`)
     emit('connected')
   }
@@ -159,13 +185,28 @@ const connectWebSocket = (type: 'basic' | 'claude') => {
   }
   
   instance.websocket.onclose = (event) => {
+    clearTimeout(connectionTimeout)
     console.log(`Terminal WebSocket disconnected (${type}):`, event.code, event.reason)
     emit('disconnected')
+    
+    // 自動再接続（非正常終了の場合）
+    if (event.code !== 1000 && retryCount < maxRetries) {
+      console.log(`Retrying WebSocket connection in ${(retryCount + 1) * 2} seconds...`)
+      setTimeout(() => {
+        connectWebSocket(type, retryCount + 1)
+      }, (retryCount + 1) * 2000) // 2秒、4秒、6秒で再試行
+    }
   }
   
   instance.websocket.onerror = (error) => {
+    clearTimeout(connectionTimeout)
     console.error(`Terminal WebSocket error (${type}):`, error)
-    emit('error', 'WebSocket接続エラーが発生しました')
+    console.error(`Failed WebSocket URL: ${wsUrl}`)
+    
+    const errorMsg = retryCount >= maxRetries 
+      ? `WebSocket接続エラー（最大再試行回数に達しました）: ${wsUrl}`
+      : `WebSocket接続エラー: ${wsUrl}`
+    emit('error', errorMsg)
   }
 }
 
