@@ -228,6 +228,99 @@
                 </div>
               </div>
             </div>
+
+            <!-- 管理者設定 -->
+            <div v-if="activeTab === 'admin' && authStore.user?.is_admin" class="space-y-6">
+              <div>
+                <h3 class="text-lg font-medium text-gray-900">ユーザー管理</h3>
+                <p class="mt-1 text-sm text-gray-600">
+                  システム全体のユーザーを管理します。
+                </p>
+              </div>
+
+              <!-- ユーザー一覧テーブル -->
+              <div class="bg-gray-50 rounded-lg p-4">
+                <div class="flex justify-between items-center mb-4">
+                  <h4 class="text-md font-medium text-gray-900">ユーザー一覧</h4>
+                  <button
+                    @click="loadUsers"
+                    class="px-3 py-1 bg-indigo-600 text-white rounded text-sm hover:bg-indigo-700"
+                  >
+                    更新
+                  </button>
+                </div>
+
+                <div v-if="adminData.loading" class="text-center py-4">
+                  <p class="text-gray-500">読み込み中...</p>
+                </div>
+
+                <div v-else-if="adminData.users.length === 0" class="text-center py-4">
+                  <p class="text-gray-500">ユーザーが見つかりません</p>
+                </div>
+
+                <div v-else class="overflow-x-auto">
+                  <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                      <tr>
+                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ユーザー名</th>
+                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">メール</th>
+                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ステータス</th>
+                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">管理者</th>
+                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">作成日</th>
+                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
+                      </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                      <tr v-for="user in adminData.users" :key="user.id" class="hover:bg-gray-50">
+                        <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900">{{ user.id }}</td>
+                        <td class="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-900">{{ user.username }}</td>
+                        <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">{{ user.email || 'N/A' }}</td>
+                        <td class="px-3 py-2 whitespace-nowrap">
+                          <span :class="[
+                            user.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800',
+                            'inline-flex px-2 py-1 text-xs font-semibold rounded-full'
+                          ]">
+                            {{ user.is_active ? '有効' : '無効' }}
+                          </span>
+                        </td>
+                        <td class="px-3 py-2 whitespace-nowrap">
+                          <span :class="[
+                            user.is_admin ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800',
+                            'inline-flex px-2 py-1 text-xs font-semibold rounded-full'
+                          ]">
+                            {{ user.is_admin ? '管理者' : '一般' }}
+                          </span>
+                        </td>
+                        <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">
+                          {{ formatDate(new Date(user.created_at)) }}
+                        </td>
+                        <td class="px-3 py-2 whitespace-nowrap text-sm font-medium space-x-2">
+                          <button
+                            v-if="user.id !== authStore.user?.id"
+                            @click="toggleUserAdmin(user)"
+                            :class="[
+                              user.is_admin ? 'text-red-600 hover:text-red-900' : 'text-blue-600 hover:text-blue-900'
+                            ]"
+                          >
+                            {{ user.is_admin ? '管理者解除' : '管理者設定' }}
+                          </button>
+                          <button
+                            v-if="user.id !== authStore.user?.id"
+                            @click="toggleUserStatus(user)"
+                            :class="[
+                              user.is_active ? 'text-red-600 hover:text-red-900' : 'text-green-600 hover:text-green-900'
+                            ]"
+                          >
+                            {{ user.is_active ? '無効化' : '有効化' }}
+                          </button>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
           </div>
 
           <!-- 保存ボタン -->
@@ -246,21 +339,31 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import NotificationSettings from '@/components/NotificationSettings.vue'
+import axios from 'axios'
 
 const router = useRouter()
 const authStore = useAuthStore()
 
 // タブ定義
-const tabs = [
-  { id: 'general', name: '一般' },
-  { id: 'notifications', name: '通知' },
-  { id: 'security', name: 'セキュリティ' },
-  { id: 'api', name: 'API' }
-]
+const tabs = computed(() => {
+  const baseTabs = [
+    { id: 'general', name: '一般' },
+    { id: 'notifications', name: '通知' },
+    { id: 'security', name: 'セキュリティ' },
+    { id: 'api', name: 'API' }
+  ]
+  
+  // 管理者ユーザーには管理タブを追加
+  if (authStore.user?.is_admin) {
+    baseTabs.push({ id: 'admin', name: '管理' })
+  }
+  
+  return baseTabs
+})
 
 const activeTab = ref('general')
 
@@ -279,6 +382,12 @@ const passwordForm = reactive({
   current: '',
   new: '',
   confirm: ''
+})
+
+// 管理者データ
+const adminData = reactive({
+  users: [] as any[],
+  loading: false
 })
 
 // マスクされたAPIキー
@@ -346,4 +455,87 @@ const saveSettings = async () => {
     alert('設定の保存に失敗しました')
   }
 }
+
+// 日付フォーマット
+const formatDate = (date: Date) => {
+  return new Intl.DateTimeFormat('ja-JP', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(date)
+}
+
+// ユーザー一覧を読み込み
+const loadUsers = async () => {
+  adminData.loading = true
+  try {
+    const response = await axios.get('/api/users/', {
+      headers: {
+        'Authorization': `Bearer ${authStore.token}`
+      }
+    })
+    adminData.users = response.data
+  } catch (error) {
+    console.error('ユーザー一覧取得エラー:', error)
+    alert('ユーザー一覧の取得に失敗しました')
+  } finally {
+    adminData.loading = false
+  }
+}
+
+// ユーザーの管理者権限を切り替え
+const toggleUserAdmin = async (user: any) => {
+  const action = user.is_admin ? '管理者権限を削除' : '管理者権限を付与'
+  
+  if (!confirm(`ユーザー「${user.username}」の${action}しますか？`)) {
+    return
+  }
+
+  try {
+    const response = await axios.put(`/api/users/${user.id}/admin`, {}, {
+      headers: {
+        'Authorization': `Bearer ${authStore.token}`
+      }
+    })
+    alert(response.data.message)
+    
+    // ローカルの状態を更新
+    user.is_admin = !user.is_admin
+  } catch (error: any) {
+    console.error('管理者権限変更エラー:', error)
+    alert(error.response?.data?.detail || '管理者権限の変更に失敗しました')
+  }
+}
+
+// ユーザーのアクティブ状態を切り替え
+const toggleUserStatus = async (user: any) => {
+  const action = user.is_active ? 'アカウントを無効化' : 'アカウントを有効化'
+  
+  if (!confirm(`ユーザー「${user.username}」の${action}しますか？`)) {
+    return
+  }
+
+  try {
+    const response = await axios.put(`/api/users/${user.id}/status`, {}, {
+      headers: {
+        'Authorization': `Bearer ${authStore.token}`
+      }
+    })
+    alert(response.data.message)
+    
+    // ローカルの状態を更新
+    user.is_active = !user.is_active
+  } catch (error: any) {
+    console.error('ユーザー状態変更エラー:', error)
+    alert(error.response?.data?.detail || 'ユーザー状態の変更に失敗しました')
+  }
+}
+
+// コンポーネントマウント時
+onMounted(() => {
+  // 管理者の場合はユーザー一覧を読み込み
+  if (authStore.user?.is_admin) {
+    loadUsers()
+  }
+})
 </script>

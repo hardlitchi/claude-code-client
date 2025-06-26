@@ -123,6 +123,60 @@
                 </div>
               </div>
 
+              <!-- パスワード変更 -->
+              <div class="border-t border-gray-200 pt-8">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">パスワード変更</h3>
+                <form @submit.prevent="changePassword" class="space-y-4">
+                  <div>
+                    <label for="currentPassword" class="block text-sm font-medium text-gray-700">
+                      現在のパスワード
+                    </label>
+                    <input
+                      type="password"
+                      id="currentPassword"
+                      v-model="passwordForm.currentPassword"
+                      required
+                      class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label for="newPassword" class="block text-sm font-medium text-gray-700">
+                      新しいパスワード
+                    </label>
+                    <input
+                      type="password"
+                      id="newPassword"
+                      v-model="passwordForm.newPassword"
+                      required
+                      minlength="8"
+                      class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                    <p class="mt-1 text-sm text-gray-500">8文字以上で入力してください</p>
+                  </div>
+                  <div>
+                    <label for="confirmPassword" class="block text-sm font-medium text-gray-700">
+                      新しいパスワード（確認）
+                    </label>
+                    <input
+                      type="password"
+                      id="confirmPassword"
+                      v-model="passwordForm.confirmPassword"
+                      required
+                      class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                  </div>
+                  <div class="pt-2">
+                    <button
+                      type="submit"
+                      :disabled="passwordForm.loading"
+                      class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {{ passwordForm.loading ? '変更中...' : 'パスワードを変更' }}
+                    </button>
+                  </div>
+                </form>
+              </div>
+
               <!-- アカウント情報 -->
               <div class="border-t border-gray-200 pt-8">
                 <h3 class="text-lg font-medium text-gray-900 mb-4">アカウント情報</h3>
@@ -204,6 +258,7 @@
 import { reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import axios from 'axios'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -221,6 +276,14 @@ const profile = reactive({
   accountType: 'Pro',
   storageUsed: '2.5 GB',
   storageLimit: '10 GB'
+})
+
+// パスワード変更フォーム
+const passwordForm = reactive({
+  currentPassword: '',
+  newPassword: '',
+  confirmPassword: '',
+  loading: false
 })
 
 // 日付フォーマット
@@ -260,6 +323,51 @@ const changeAvatar = () => {
     }
   }
   input.click()
+}
+
+// パスワード変更
+const changePassword = async () => {
+  // バリデーション
+  if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+    alert('新しいパスワードと確認用パスワードが一致しません')
+    return
+  }
+
+  if (passwordForm.newPassword.length < 8) {
+    alert('新しいパスワードは8文字以上で入力してください')
+    return
+  }
+
+  passwordForm.loading = true
+
+  try {
+    const response = await axios.post('/api/users/me/change-password', {
+      current_password: passwordForm.currentPassword,
+      new_password: passwordForm.newPassword
+    }, {
+      headers: {
+        'Authorization': `Bearer ${authStore.token}`
+      }
+    })
+
+    alert('パスワードを変更しました')
+    
+    // フォームをリセット
+    passwordForm.currentPassword = ''
+    passwordForm.newPassword = ''
+    passwordForm.confirmPassword = ''
+    
+  } catch (error: any) {
+    console.error('パスワード変更エラー:', error)
+    
+    if (error.response?.status === 400) {
+      alert('現在のパスワードが正しくありません')
+    } else {
+      alert('パスワードの変更に失敗しました。再度お試しください。')
+    }
+  } finally {
+    passwordForm.loading = false
+  }
 }
 
 // プロフィール保存
